@@ -16,6 +16,7 @@
 
 package io.grpc.binder.internal;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import android.app.admin.DevicePolicyManager;
@@ -258,6 +259,10 @@ final class ServiceBinding implements Bindable, ServiceConnection {
   @Override
   @MainThread
   public void onServiceConnected(ComponentName className, IBinder binder) {
+    checkNotNull(binder, "binder==null in onServiceConnected(). If this is a robolectric test, prefer to "
+      + "use the in-process transport instead. In the uncommon case that your test actually needs the " 
+      + "binder transport, use ShadowApplication#setComponentNameAndServiceForBindServiceForIntent to tell "
+      + "robolectric about your Server.");
     boolean bound = false;
     synchronized (this) {
       if (state == State.BINDING) {
