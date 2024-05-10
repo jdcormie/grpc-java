@@ -40,6 +40,7 @@ import javax.annotation.Nullable;
 public final class LeakSafeOneWayBinder extends Binder {
 
   private static final Logger logger = Logger.getLogger(LeakSafeOneWayBinder.class.getName());
+  private static final TransactionHandler CONNECTION_REFUSED_HANDLER = new ConnectionRefusingHandler();
 
   @Internal
   public interface TransactionHandler {
@@ -67,8 +68,18 @@ public final class LeakSafeOneWayBinder extends Binder {
     this.handler = handler;
   }
 
+  /**
+   * Clears our reference to the delegate handler, ensuring that only {@code this} can ever leak.
+   *
+   * <p>Subsequent incoming transactions will be silently dropped however this takes effect eventually, not immediately.
+   */
   public void detach() {
+    // The Java memory model promises reference assignment is atomic.
     handler = null;
+  }
+
+  public void detachAndRefuseMoreConnections() {
+    handler = CONNECTION_REFUSED_HANDLER;
   }
 
   @Override
