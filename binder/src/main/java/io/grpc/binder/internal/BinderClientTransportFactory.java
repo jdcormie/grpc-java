@@ -49,6 +49,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
   final Context sourceContext;
   final BinderChannelCredentials channelCredentials;
   final Executor mainThreadExecutor;
+  final ObjectPool<? extends Executor> executorPool;
   final ObjectPool<ScheduledExecutorService> scheduledExecutorPool;
   final ObjectPool<? extends Executor> offloadExecutorPool;
   final SecurityPolicy securityPolicy;
@@ -69,6 +70,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
         builder.mainThreadExecutor : ContextCompat.getMainExecutor(sourceContext);
     scheduledExecutorPool = checkNotNull(builder.scheduledExecutorPool);
     offloadExecutorPool = checkNotNull(builder.offloadExecutorPool);
+    executorPool = checkNotNull(builder.executorPool);
     securityPolicy = checkNotNull(builder.securityPolicy);
     targetUserHandle = builder.targetUserHandle;
     bindServiceFlags = checkNotNull(builder.bindServiceFlags);
@@ -123,6 +125,8 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
     Executor mainThreadExecutor;  // Default filled-in at build time once sourceContext is decided.
     ObjectPool<ScheduledExecutorService> scheduledExecutorPool =
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE);
+    ObjectPool<? extends Executor> executorPool =
+        SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
     SecurityPolicy securityPolicy = SecurityPolicies.internalOnly();
     @Nullable
     UserHandle targetUserHandle;
@@ -137,6 +141,11 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
 
     public Builder setSourceContext(Context sourceContext) {
       this.sourceContext = checkNotNull(sourceContext);
+      return this;
+    }
+
+    public Builder setExecutorPool( ObjectPool<? extends Executor> executorPool) {
+      this.executorPool = checkNotNull(executorPool, "executorPool");
       return this;
     }
 

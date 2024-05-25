@@ -294,8 +294,10 @@ public final class BinderChannelBuilder
 
   @Override
   public ManagedChannel build() {
-    transportFactoryBuilder.setOffloadExecutorPool(
-        managedChannelImplBuilder.getOffloadExecutorPool());
+    transportFactoryBuilder
+        .setOffloadExecutorPool(managedChannelImplBuilder.getOffloadExecutorPool())
+        .setExecutorPool(managedChannelImplBuilder.getExecutorPool())
+    ;
     return super.build();
   }
 }

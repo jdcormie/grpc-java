@@ -930,4 +930,11 @@ public final class ManagedChannelImplBuilder
   public ObjectPool<? extends Executor> getOffloadExecutorPool() {
     return this.offloadExecutorPool;
   }
+
+  /**
+   * Returns the internal executor pool.
+   */
+  public ObjectPool<? extends Executor> getExecutorPool() {
+    return this.executorPool;
+  }
 }

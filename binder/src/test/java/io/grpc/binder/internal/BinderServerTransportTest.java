@@ -70,6 +70,7 @@ public final class BinderServerTransportTest {
     transport =
         new BinderTransport.BinderServerTransport(
             new FixedObjectPool<>(executorService),
+            new FixedObjectPool<>(executorService),
             Attributes.EMPTY,
             ImmutableList.of(),
             OneWayBinderProxy.IDENTITY_DECORATOR,

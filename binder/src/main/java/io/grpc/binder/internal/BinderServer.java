@@ -40,6 +40,7 @@ import io.grpc.internal.SharedResourcePool;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
@@ -56,6 +57,7 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.TransactionHandler {
 
+  private final ObjectPool<? extends Executor> executorPool;
   private final ObjectPool<ScheduledExecutorService> executorServicePool;
   private final ImmutableList<ServerStreamTracer.Factory> streamTracerFactories;
   private final AndroidComponentAddress listenAddress;
@@ -76,6 +78,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private BinderServer(Builder builder) {
     this.listenAddress = checkNotNull(builder.listenAddress);
     this.executorServicePool = builder.executorServicePool;
+    this.executorPool = builder.executorPool;
     this.streamTracerFactories =
         ImmutableList.copyOf(checkNotNull(builder.streamTracerFactories, "streamTracerFactories"));
     this.serverPolicyChecker = BinderInternal.createPolicyChecker(builder.serverSecurityPolicy);
@@ -154,6 +157,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
           // Create a new transport and let our listener know about it.
           BinderTransport.BinderServerTransport transport =
               new BinderTransport.BinderServerTransport(
+                  executorPool,
                   executorServicePool, attrsBuilder.build(), streamTracerFactories,
                   OneWayBinderProxy.IDENTITY_DECORATOR,
                   callbackBinder);
@@ -172,6 +176,8 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
 
     ObjectPool<ScheduledExecutorService> executorServicePool =
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE);
+    ObjectPool<? extends Executor> executorPool =
+        SharedResourcePool.forResource(GrpcUtil.SHARED_CHANNEL_EXECUTOR);
     ServerSecurityPolicy serverSecurityPolicy = SecurityPolicies.serverInternalOnly();
     InboundParcelablePolicy inboundParcelablePolicy = InboundParcelablePolicy.DEFAULT;
     BinderTransportSecurity.ShutdownListener shutdownListener = () -> {};
@@ -200,6 +206,16 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
      */
     public Builder setStreamTracerFactories(List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
       this.streamTracerFactories = streamTracerFactories;
+      return this;
+    }
+
+    /**
+     * Sets the executor to be used for doing work on this server.
+     *
+     * <p>Optional. A process-wide default executor will be used if unset.
+     */
+    public Builder setExecutorPool(ObjectPool<? extends Executor> executorPool) {
+      this.executorPool = checkNotNull(executorPool, "executorPool");
       return this;
     }
 

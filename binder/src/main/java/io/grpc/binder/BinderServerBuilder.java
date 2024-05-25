@@ -167,6 +167,7 @@ public final class BinderServerBuilder
     Executor executor = executorPool.getObject();
     BinderTransportSecurity.installAuthInterceptor(this, executor);
     internalBuilder.setShutdownListener(() -> executorPool.returnObject(executor));
+    internalBuilder.setExecutorPool(executorPool);
     return super.build();
   }
 }

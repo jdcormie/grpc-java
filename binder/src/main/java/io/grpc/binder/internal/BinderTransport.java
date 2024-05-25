@@ -28,6 +28,7 @@ import android.os.Parcel;
 import android.os.Process;
 import android.os.RemoteException;
 import android.os.TransactionTooLargeException;
+import android.os.UserHandle;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ticker;
 import com.google.common.base.Verify;
@@ -46,6 +47,8 @@ import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.binder.AndroidComponentAddress;
+import io.grpc.binder.BindServiceFlags;
+import io.grpc.binder.BinderChannelCredentials;
 import io.grpc.binder.InboundParcelablePolicy;
 import io.grpc.binder.SecurityPolicy;
 import io.grpc.internal.ClientStream;
@@ -183,8 +186,10 @@ public abstract class BinderTransport
     // receive any data.
   }
 
+  private final ObjectPool<? extends Executor> executorPool;
   private final ObjectPool<ScheduledExecutorService> executorServicePool;
   private final ScheduledExecutorService scheduledExecutorService;
+  private final Executor executor;
   private final InternalLogId logId;
   private final LeakSafeOneWayBinder incomingBinder;
 
@@ -215,22 +220,28 @@ public abstract class BinderTransport
   private long acknowledgedIncomingBytes;
 
   private BinderTransport(
+      ObjectPool<? extends Executor> executorPool,
       ObjectPool<ScheduledExecutorService> executorServicePool,
       Attributes attributes,
       OneWayBinderProxy.Decorator binderDecorator,
       InternalLogId logId) {
     this.binderDecorator = binderDecorator;
+    this.executorPool = executorPool;
     this.executorServicePool = executorServicePool;
     this.attributes = attributes;
     this.logId = logId;
     scheduledExecutorService = executorServicePool.getObject();
+    executor = executorPool.getObject();
     incomingBinder = new LeakSafeOneWayBinder(this);
     ongoingCalls = new ConcurrentHashMap<>();
     flowController = new FlowController(TRANSACTION_BYTES_WINDOW);
     numIncomingBytes = new AtomicLong();
   }
 
-  // Override in child class.
+  public final Executor getExecutor() {
+    return executor;
+  }
+
   public final ScheduledExecutorService getScheduledExecutorService() {
     return scheduledExecutorService;
   }
@@ -264,6 +275,7 @@ public abstract class BinderTransport
 
   void releaseExecutors() {
     executorServicePool.returnObject(scheduledExecutorService);
+    executorPool.returnObject(executor);
   }
 
   @GuardedBy("this")
@@ -313,7 +325,7 @@ public abstract class BinderTransport
       sendShutdownTransaction();
       ArrayList<Inbound<?>> calls = new ArrayList<>(ongoingCalls.values());
       ongoingCalls.clear();
-      scheduledExecutorService.execute(
+      executor.execute(
           () -> {
             for (Inbound<?> inbound : calls) {
               synchronized (inbound) {
@@ -383,7 +395,7 @@ public abstract class BinderTransport
     boolean removed = (ongoingCalls.remove(callId) != null);
     if (removed && ongoingCalls.isEmpty()) {
       // Possibly shutdown (not synchronously, since inbound is held).
-      scheduledExecutorService.execute(
+      executor.execute(
           () -> {
             synchronized (this) {
               if (inState(TransportState.SHUTDOWN)) {
@@ -580,6 +592,7 @@ public abstract class BinderTransport
         AndroidComponentAddress targetAddress,
         ClientTransportOptions options) {
       super(
+          factory.executorPool,
           factory.scheduledExecutorPool,
           buildClientAttributes(options.getEagAttributes(),
               factory.sourceContext, targetAddress, factory.inboundParcelablePolicy),
@@ -828,15 +841,15 @@ public abstract class BinderTransport
      * @param binderDecorator used to decorate 'callbackBinder', for fault injection.
      */
     public BinderServerTransport(
+        ObjectPool<? extends Executor> executorPool,
         ObjectPool<ScheduledExecutorService> executorServicePool,
         Attributes attributes,
         List<ServerStreamTracer.Factory> streamTracerFactories,
         OneWayBinderProxy.Decorator binderDecorator,
         IBinder callbackBinder) {
-      super(executorServicePool, attributes, binderDecorator, buildLogId(attributes));
+      super(executorPool, executorServicePool, attributes, binderDecorator, buildLogId(attributes));
       this.streamTracerFactories = streamTracerFactories;
-      // TODO(jdcormie): Plumb in the Server's executor() and use it here instead.
-      setOutgoingBinder(OneWayBinderProxy.wrap(callbackBinder, getScheduledExecutorService()));
+      setOutgoingBinder(OneWayBinderProxy.wrap(callbackBinder, getExecutor()));
     }
 
     public synchronized void setServerTransportListener(ServerTransportListener serverTransportListener) {
