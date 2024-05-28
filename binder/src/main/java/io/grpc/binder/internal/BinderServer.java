@@ -76,7 +76,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private boolean shutdown;
 
   private BinderServer(Builder builder) {
-    this.listenAddress = checkNotNull(builder.listenAddress);
+    this.listenAddress = checkNotNull(builder.listenAddress, "listenAddress");
     this.executorServicePool = builder.executorServicePool;
     this.executorPool = builder.executorPool;
     this.streamTracerFactories =
@@ -256,7 +256,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
      * <p>Optional.
      */
     public Builder setShutdownListener(BinderTransportSecurity.ShutdownListener shutdownListener) {
-      this.shutdownListener = checkNotNull(shutdownListener, shutdownListener);
+      this.shutdownListener = checkNotNull(shutdownListener, "shutdownListener");
       return this;
     }
   }
