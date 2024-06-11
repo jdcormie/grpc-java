@@ -17,8 +17,12 @@
 package io.grpc.binder;
 
 import android.os.IBinder;
+import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Internal;
+import io.grpc.Status;
 import io.grpc.binder.internal.BinderTransportSecurity;
+import io.grpc.binder.internal.BinderTransportSecurity.ServerPolicyChecker;
+import java.util.concurrent.Executor;
 
 /**
  * Helper class to expose IBinderReceiver methods for legacy internal builders.
@@ -39,7 +43,7 @@ public class BinderInternal {
    * without causing hard dependencies on a specific class.
    */
   public static BinderTransportSecurity.ServerPolicyChecker createPolicyChecker(
-          ServerSecurityPolicy securityPolicy) {
-    return securityPolicy::checkAuthorizationForServiceAsync;
+          ServerSecurityPolicy securityPolicy, Executor executor) {
+    return (uid, serviceName) -> securityPolicy.checkAuthorizationForServiceAsync(uid, serviceName, executor);
   }
 }

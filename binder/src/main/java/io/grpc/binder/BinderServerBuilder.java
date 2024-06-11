@@ -151,6 +151,25 @@ public final class BinderServerBuilder
   }
 
   /**
+   * Provides a custom executor that will be used for operations that block or are expensive, to
+   * avoid blocking asynchronous code paths. For example, SecurityPolicy evaluation uses this
+   * executor (many implementations require one or more IPC round trips to Android's system server).
+   *
+   * <p>It's an optional parameter. If the user has not provided an executor when the channel is
+   * built, the builder will use a static cached thread pool.
+   *
+   * <p>The channel won't take ownership of the given executor. Callers must ensure that it lives at
+   * least as long as the servers you build.
+   *
+   * @return this
+   */
+  public BinderServerBuilder offloadExecutor(Executor executor) {
+    internalBuilder.setOffloadExecutorPool(
+        new FixedObjectPool<>(checkNotNull(executor, "offloadExecutor")));
+    return this;
+  }
+
+  /**
    * Builds a {@link Server} according to this builder's parameters and stores its listening {@link
    * IBinder} in the {@link IBinderReceiver} passed to {@link #forAddress(AndroidComponentAddress,
    * IBinderReceiver)}.

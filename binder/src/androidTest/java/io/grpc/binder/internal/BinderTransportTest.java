@@ -72,6 +72,7 @@ public final class BinderTransportTest extends AbstractTransportTest {
     BinderServer binderServer = new BinderServer.Builder()
         .setListenAddress(addr)
         .setExecutorServicePool(executorServicePool)
+        .setOffloadExecutorPool(offloadExecutorPool)
         .setStreamTracerFactories(streamTracerFactories)
         .build();
 

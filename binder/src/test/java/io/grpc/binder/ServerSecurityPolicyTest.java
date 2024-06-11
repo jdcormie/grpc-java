@@ -17,6 +17,7 @@
 package io.grpc.binder;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static org.junit.Assert.assertThrows;
 
 import static org.junit.Assert.fail;
@@ -154,7 +155,7 @@ public final class ServerSecurityPolicyTest {
                 // of futures gets properly handled.
                 ListenableFuture<Void> dependency = Futures.immediateVoidFuture();
                 return Futures
-                        .transform(dependency, unused -> Status.OK, MoreExecutors.directExecutor());
+                        .transform(dependency, unused -> Status.OK, directExecutor());
             }))
             .build();
 
@@ -180,7 +181,7 @@ public final class ServerSecurityPolicyTest {
             .build();
 
     ListenableFuture<Status> statusFuture =
-        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1);
+        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1, directExecutor());
 
     assertThrows(ExecutionException.class, statusFuture::get);
   }
@@ -193,7 +194,7 @@ public final class ServerSecurityPolicyTest {
             .build();
 
     ListenableFuture<Status> statusFuture =
-        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1);
+        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1, directExecutor());
 
     assertThrows(CancellationException.class, statusFuture::get);
   }
@@ -223,7 +224,7 @@ public final class ServerSecurityPolicyTest {
             }))
             .build();
     ListenableFuture<Status> statusFuture =
-        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1);
+        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1, directExecutor());
 
     assertThrows(InterruptedException.class, statusFuture::get);
     listeningExecutorService.shutdownNow();
@@ -303,7 +304,7 @@ public final class ServerSecurityPolicyTest {
                                                       anotherUid
                                                               ? Status.OK
                                                               : Status.PERMISSION_DENIED,
-                                              MoreExecutors.directExecutor());
+                                              directExecutor());
                             }))
                     .build();
 
@@ -335,7 +336,7 @@ public final class ServerSecurityPolicyTest {
           int callerUid,
           String service) throws ExecutionException {
     ListenableFuture<Status> statusFuture =
-        policy.checkAuthorizationForServiceAsync(callerUid, service);
+        policy.checkAuthorizationForServiceAsync(callerUid, service, directExecutor());
     return Uninterruptibles.getUninterruptibly(statusFuture).getCode();
   }
 

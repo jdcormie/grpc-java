@@ -43,6 +43,7 @@ import io.grpc.internal.SharedResourcePool;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -63,10 +64,11 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private static final Logger logger = Logger.getLogger(BinderServer.class.getName());
 
   private final ObjectPool<ScheduledExecutorService> executorServicePool;
+  private final ObjectPool<? extends Executor> offloadExecutorPool;
   private final ImmutableList<ServerStreamTracer.Factory> streamTracerFactories;
   private final AndroidComponentAddress listenAddress;
   private final LeakSafeOneWayBinder hostServiceBinder;
-  private final BinderTransportSecurity.ServerPolicyChecker serverPolicyChecker;
+  private final ServerSecurityPolicy serverSecurityPolicy;
   private final InboundParcelablePolicy inboundParcelablePolicy;
   private final Runnable terminationListener;
 
@@ -74,7 +76,13 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private ServerListener listener;
 
   @GuardedBy("this")
+  private BinderTransportSecurity.ServerPolicyChecker serverPolicyChecker;
+
+  @GuardedBy("this")
   private ScheduledExecutorService executorService;
+
+  @GuardedBy("this")
+  private Executor offloadExecutor;
 
   @GuardedBy("this")
   private boolean shutdown;
@@ -82,9 +90,11 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private BinderServer(Builder builder) {
     this.listenAddress = checkNotNull(builder.listenAddress);
     this.executorServicePool = builder.executorServicePool;
+    this.offloadExecutorPool = builder.offloadExecutorPool != null ?
+        builder.offloadExecutorPool : builder.executorServicePool;
     this.streamTracerFactories =
         ImmutableList.copyOf(checkNotNull(builder.streamTracerFactories, "streamTracerFactories"));
-    this.serverPolicyChecker = BinderInternal.createPolicyChecker(builder.serverSecurityPolicy);
+    this.serverSecurityPolicy = builder.serverSecurityPolicy;
     this.inboundParcelablePolicy = builder.inboundParcelablePolicy;
     this.terminationListener = builder.terminationListener;
     hostServiceBinder = new LeakSafeOneWayBinder(this);
@@ -97,8 +107,10 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
 
   @Override
   public synchronized void start(ServerListener serverListener) throws IOException {
-    listener = new ActiveTransportTracker(serverListener, terminationListener);
+    listener = new ActiveTransportTracker(serverListener, this::onTermination);
     executorService = executorServicePool.getObject();
+    offloadExecutor = offloadExecutorPool.getObject();
+    serverPolicyChecker = BinderInternal.createPolicyChecker(serverSecurityPolicy, offloadExecutor);
   }
 
   @Override
@@ -129,8 +141,14 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
       // Break the connection to the binder. We'll receive no more transactions.
       hostServiceBinder.setHandler(GoAwayHandler.INSTANCE);
       listener.serverShutdown();
+      // TODO(jdcormie): Should this move to onTermination? Who even uses this?
       executorService = executorServicePool.returnObject(executorService);
     }
+  }
+
+  private void onTermination() {
+    offloadExecutor = offloadExecutorPool.returnObject(offloadExecutor);
+    terminationListener.run();
   }
 
   @Override
@@ -202,6 +220,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   public static class Builder {
     @Nullable AndroidComponentAddress listenAddress;
     @Nullable List<? extends ServerStreamTracer.Factory> streamTracerFactories;
+    @Nullable ObjectPool<? extends Executor> offloadExecutorPool;
 
     ObjectPool<ScheduledExecutorService> executorServicePool =
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE);
@@ -244,6 +263,16 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     public Builder setExecutorServicePool(
         ObjectPool<ScheduledExecutorService> executorServicePool) {
       this.executorServicePool = checkNotNull(executorServicePool, "executorServicePool");
+      return this;
+    }
+
+    /**
+     * Sets the executor to be used for blocking work.
+     *
+     * <p>Optional. If unset, 'executorServicePool' will be used for this work (not recommended).
+     */
+    public Builder setOffloadExecutorPool(ObjectPool<? extends Executor> offloadExecutorPool) {
+      this.offloadExecutorPool = offloadExecutorPool;
       return this;
     }
 
