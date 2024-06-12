@@ -220,7 +220,7 @@ public final class BinderTransportSecurity {
    *
    * <p>This class provides the asynchronous version of {@link io.grpc.binder.SecurityPolicy},
    * allowing implementations of authorization logic that involves slow or asynchronous calls
-   * without necessarily blocking the calling thread.
+   * without blocking the calling thread.
    *
    * @see io.grpc.binder.SecurityPolicy
    */
@@ -230,6 +230,8 @@ public final class BinderTransportSecurity {
      *
      * <p>This method never throws an exception. If the execution of the security policy check
      * fails, a failed future with such exception is returned.
+     *
+     * <p>This method never blocks the calling thread.
      *
      * @param uid The Android UID to authenticate.
      * @param serviceName The name of the gRPC service being called.
