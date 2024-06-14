@@ -65,9 +65,9 @@ public final class ServerSecurityPolicy {
    * <p>This method never throws an exception. If the execution of the security policy check
    * fails, a failed future with such exception is returned.
    *
-   * @param uid The Android UID to authenticate.
+   * @param uid The authentic Android UID to authorize.
    * @param serviceName The name of the gRPC service being called.
-   * @param offloadExecutor for evaluating the relevant SecurityPolicy if not natively async
+   * @param offloadExecutor for evaluating the relevant SecurityPolicy if it's not natively async
    * @return a future with the result of the authorization check. A failed future represents a
    *     failure to perform the authorization check, not that the access is denied.
    */

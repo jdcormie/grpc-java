@@ -653,7 +653,7 @@ public abstract class BinderTransport
     }
 
     @Override
-    public ClientStream newStream(
+    public synchronized ClientStream newStream(
         final MethodDescriptor<?, ?> method,
         final Metadata headers,
         final CallOptions callOptions,

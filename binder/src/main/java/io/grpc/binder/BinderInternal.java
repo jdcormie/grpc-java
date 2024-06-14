@@ -19,7 +19,6 @@ package io.grpc.binder;
 import android.os.IBinder;
 import io.grpc.Internal;
 import io.grpc.binder.internal.BinderTransportSecurity;
-import java.util.concurrent.Executor;
 
 /**
  * Helper class to expose IBinderReceiver methods for legacy internal builders.

@@ -165,6 +165,9 @@ public final class BinderTransportSecurity {
     private final ConcurrentHashMap<String, ListenableFuture<Status>> serviceAuthorization;
     private final Executor offloadExecutor;
 
+    /**
+     * @param offloadExecutor must remain valid for the lifetime of the associated transport
+     */
     TransportAuthorizationState(int uid, ServerPolicyChecker serverPolicyChecker,
         Executor offloadExecutor) {
       this.uid = uid;
@@ -232,11 +235,13 @@ public final class BinderTransportSecurity {
      *
      * <p>This method never blocks the calling thread.
      *
-     * @param uid The Android UID to authenticate.
+     * @param uid The authentic Android UID to authorize.
      * @param serviceName The name of the gRPC service being called.
+     * @param offloadExecutor used for blocking or expensive work if necessary
      * @return a future with the result of the authorization check. A failed future represents a
      *    failure to perform the authorization check, not that the access is denied.
      */
-    ListenableFuture<Status> checkAuthorizationForServiceAsync(int uid, String serviceName, Executor executor);
+    ListenableFuture<Status> checkAuthorizationForServiceAsync(int uid, String serviceName,
+        Executor offloadExecutor);
   }
 }
