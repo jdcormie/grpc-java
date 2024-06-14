@@ -68,15 +68,11 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private final ImmutableList<ServerStreamTracer.Factory> streamTracerFactories;
   private final AndroidComponentAddress listenAddress;
   private final LeakSafeOneWayBinder hostServiceBinder;
-  private final ServerSecurityPolicy serverSecurityPolicy;
+  private final BinderTransportSecurity.ServerPolicyChecker serverPolicyChecker;
   private final InboundParcelablePolicy inboundParcelablePolicy;
-  private final Runnable terminationListener;
 
   @GuardedBy("this")
   private ServerListener listener;
-
-  @GuardedBy("this")
-  private BinderTransportSecurity.ServerPolicyChecker serverPolicyChecker;
 
   @GuardedBy("this")
   private ScheduledExecutorService executorService;
@@ -94,9 +90,8 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
         builder.offloadExecutorPool : builder.executorServicePool;
     this.streamTracerFactories =
         ImmutableList.copyOf(checkNotNull(builder.streamTracerFactories, "streamTracerFactories"));
-    this.serverSecurityPolicy = builder.serverSecurityPolicy;
+    this.serverPolicyChecker = BinderInternal.createPolicyChecker(builder.serverSecurityPolicy);
     this.inboundParcelablePolicy = builder.inboundParcelablePolicy;
-    this.terminationListener = builder.terminationListener;
     hostServiceBinder = new LeakSafeOneWayBinder(this);
   }
 
@@ -110,7 +105,6 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     listener = new ActiveTransportTracker(serverListener, this::onTermination);
     executorService = executorServicePool.getObject();
     offloadExecutor = offloadExecutorPool.getObject();
-    serverPolicyChecker = BinderInternal.createPolicyChecker(serverSecurityPolicy);
   }
 
   @Override
@@ -148,7 +142,6 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
 
   private void onTermination() {
     offloadExecutor = offloadExecutorPool.returnObject(offloadExecutor);
-    terminationListener.run();
   }
 
   @Override
@@ -226,7 +219,6 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE);
     ServerSecurityPolicy serverSecurityPolicy = SecurityPolicies.serverInternalOnly();
     InboundParcelablePolicy inboundParcelablePolicy = InboundParcelablePolicy.DEFAULT;
-    Runnable terminationListener = () -> {};
 
     public BinderServer build() {
       return new BinderServer(this);
