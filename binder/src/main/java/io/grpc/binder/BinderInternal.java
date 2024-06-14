@@ -36,8 +36,8 @@ public class BinderInternal {
 
   /**
    * Creates a {@link BinderTransportSecurity.ServerPolicyChecker} from a
-   * {@link ServerSecurityPolicy} and a default {@link Executor}. This exposes to callers an
-   * interface to check security policies without causing hard dependencies on a specific class.
+   * {@link ServerSecurityPolicy}. This exposes to callers an interface to check security policies
+   * without causing hard dependencies on a specific class.
    */
   public static BinderTransportSecurity.ServerPolicyChecker createPolicyChecker(
       ServerSecurityPolicy securityPolicy) {
