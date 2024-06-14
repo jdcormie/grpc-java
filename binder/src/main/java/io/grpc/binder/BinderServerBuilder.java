@@ -153,8 +153,9 @@ public final class BinderServerBuilder
 
   /**
    * Provides a custom executor that will be used for operations that block or are expensive, to
-   * avoid blocking asynchronous code paths. For example, SecurityPolicy evaluation uses this
-   * executor (many implementations require one or more IPC round trips to Android's system server).
+   * avoid doing such things on asynchronous code paths. For example, SecurityPolicy evaluation
+   * uses this executor (many implementations require one or more IPC round trips to Android's
+   * system server).
    *
    * <p>It's an optional parameter. If the user has not provided an executor when the channel is
    * built, the builder will use a static cached thread pool.
