@@ -70,6 +70,7 @@ public final class BinderTransportSecurity {
    * @param builder The {@link Attributes.Builder} for the transport being created.
    * @param remoteUid The remote UID of the transport.
    * @param serverPolicyChecker The policy checker for this transport.
+   * @param offloadExecutor used for blocking or expensive work if necessary
    */
   @Internal
   public static void attachAuthAttrs(
@@ -235,7 +236,7 @@ public final class BinderTransportSecurity {
      *
      * <p>This method never blocks the calling thread.
      *
-     * @param uid The authentic Android UID to authorize.
+     * @param uid The Android UID to authenticate.
      * @param serviceName The name of the gRPC service being called.
      * @param offloadExecutor used for blocking or expensive work if necessary
      * @return a future with the result of the authorization check. A failed future represents a

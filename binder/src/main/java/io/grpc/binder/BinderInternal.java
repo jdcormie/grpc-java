@@ -39,7 +39,7 @@ public class BinderInternal {
    * without causing hard dependencies on a specific class.
    */
   public static BinderTransportSecurity.ServerPolicyChecker createPolicyChecker(
-      ServerSecurityPolicy securityPolicy) {
+          ServerSecurityPolicy securityPolicy) {
     return (uid, serviceName, executor) ->
         securityPolicy.checkAuthorizationForServiceAsync(uid, serviceName, executor);
   }
