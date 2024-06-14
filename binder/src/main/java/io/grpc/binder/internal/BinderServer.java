@@ -110,7 +110,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     listener = new ActiveTransportTracker(serverListener, this::onTermination);
     executorService = executorServicePool.getObject();
     offloadExecutor = offloadExecutorPool.getObject();
-    serverPolicyChecker = BinderInternal.createPolicyChecker(serverSecurityPolicy, offloadExecutor);
+    serverPolicyChecker = BinderInternal.createPolicyChecker(serverSecurityPolicy);
   }
 
   @Override
@@ -179,7 +179,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
                   .set(BinderTransport.REMOTE_UID, callingUid)
                   .set(BinderTransport.SERVER_AUTHORITY, listenAddress.getAuthority())
                   .set(BinderTransport.INBOUND_PARCELABLE_POLICY, inboundParcelablePolicy);
-          BinderTransportSecurity.attachAuthAttrs(attrsBuilder, callingUid, serverPolicyChecker);
+          BinderTransportSecurity.attachAuthAttrs(attrsBuilder, callingUid, serverPolicyChecker, offloadExecutor);
           // Create a new transport and let our listener know about it.
           BinderTransport.BinderServerTransport transport =
               new BinderTransport.BinderServerTransport(
@@ -293,17 +293,6 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
      */
     public Builder setInboundParcelablePolicy(InboundParcelablePolicy inboundParcelablePolicy) {
       this.inboundParcelablePolicy = checkNotNull(inboundParcelablePolicy, "inboundParcelablePolicy");
-      return this;
-    }
-
-    /**
-     * Installs a callback that will be invoked when this server is {@link #shutdown()} and all of
-     * its transports are terminated.
-     *
-     * <p>Optional.
-     */
-    public Builder setTerminationListener(Runnable terminationListener) {
-      this.terminationListener = checkNotNull(terminationListener, "terminationListener");
       return this;
     }
   }

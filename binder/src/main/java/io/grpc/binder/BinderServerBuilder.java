@@ -35,6 +35,7 @@ import io.grpc.internal.ObjectPool;
 import java.io.File;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
+import javax.annotation.Nullable;
 
 /**
  * Builder for a server that services requests from an Android Service.
@@ -182,10 +183,7 @@ public final class BinderServerBuilder
     checkState(!isBuilt, "BinderServerBuilder can only be used to build one server instance.");
     isBuilt = true;
     // We install the security interceptor last, so it's closest to the transport.
-    ObjectPool<? extends Executor> executorPool = serverImplBuilder.getExecutorPool();
-    Executor executor = executorPool.getObject();
-    BinderTransportSecurity.installAuthInterceptor(this, executor);
-    internalBuilder.setTerminationListener(() -> executorPool.returnObject(executor));
+    BinderTransportSecurity.installAuthInterceptor(this);
     return super.build();
   }
 }

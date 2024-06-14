@@ -57,11 +57,10 @@ public final class BinderTransportSecurity {
    * Install a security policy on an about-to-be created server.
    *
    * @param serverBuilder The ServerBuilder being used to create the server.
-   * @param executor The executor in which the authorization result will be handled.
    */
   @Internal
-  public static void installAuthInterceptor(ServerBuilder<?> serverBuilder, Executor executor) {
-    serverBuilder.intercept(new ServerAuthInterceptor(executor));
+  public static void installAuthInterceptor(ServerBuilder<?> serverBuilder) {
+    serverBuilder.intercept(new ServerAuthInterceptor());
   }
 
   /**
@@ -74,11 +73,12 @@ public final class BinderTransportSecurity {
    */
   @Internal
   public static void attachAuthAttrs(
-      Attributes.Builder builder, int remoteUid, ServerPolicyChecker serverPolicyChecker) {
+      Attributes.Builder builder, int remoteUid, ServerPolicyChecker serverPolicyChecker,
+      Executor offloadExecutor) {
     builder
         .set(
             TRANSPORT_AUTHORIZATION_STATE,
-            new TransportAuthorizationState(remoteUid, serverPolicyChecker))
+            new TransportAuthorizationState(remoteUid, serverPolicyChecker, offloadExecutor))
         .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY);
   }
 
@@ -88,25 +88,20 @@ public final class BinderTransportSecurity {
    */
   private static final class ServerAuthInterceptor implements ServerInterceptor {
 
-    private final Executor executor;
-
-    ServerAuthInterceptor(Executor executor) {
-      this.executor = executor;
-    }
-
     @Override
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
         ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+      TransportAuthorizationState transpoAuthState =
+          call.getAttributes().get(TRANSPORT_AUTHORIZATION_STATE);
       ListenableFuture<Status> authStatusFuture =
-          call.getAttributes()
-              .get(TRANSPORT_AUTHORIZATION_STATE)
-              .checkAuthorization(call.getMethodDescriptor());
+          transpoAuthState.checkAuthorization(call.getMethodDescriptor());
 
       // Most SecurityPolicy will have synchronous implementations that provide an
       // immediately-resolved Future. In that case, short-circuit to avoid unnecessary allocations
       // and asynchronous code if the authorization result is already present.
       if (!authStatusFuture.isDone()) {
-        return newServerCallListenerForPendingAuthResult(authStatusFuture, call, headers, next);
+        return newServerCallListenerForPendingAuthResult(authStatusFuture,
+            transpoAuthState.offloadExecutor, call, headers, next);
       }
 
       Status authStatus;
@@ -131,6 +126,7 @@ public final class BinderTransportSecurity {
 
     private <ReqT, RespT> ServerCall.Listener<ReqT> newServerCallListenerForPendingAuthResult(
             ListenableFuture<Status> authStatusFuture,
+            Executor offloadExecutor,
             ServerCall<ReqT, RespT> call,
             Metadata headers,
             ServerCallHandler<ReqT, RespT> next) {
@@ -154,7 +150,7 @@ public final class BinderTransportSecurity {
                           Status.INTERNAL.withCause(t).withDescription("Authorization future failed"),
                           new Metadata());
                 }
-              }, executor);
+              }, offloadExecutor);
       return listener;
     }
   }
@@ -167,10 +163,13 @@ public final class BinderTransportSecurity {
     private final int uid;
     private final ServerPolicyChecker serverPolicyChecker;
     private final ConcurrentHashMap<String, ListenableFuture<Status>> serviceAuthorization;
+    private final Executor offloadExecutor;
 
-    TransportAuthorizationState(int uid, ServerPolicyChecker serverPolicyChecker) {
+    TransportAuthorizationState(int uid, ServerPolicyChecker serverPolicyChecker,
+        Executor offloadExecutor) {
       this.uid = uid;
       this.serverPolicyChecker = serverPolicyChecker;
+      this.offloadExecutor = offloadExecutor;
       serviceAuthorization = new ConcurrentHashMap<>(8);
     }
 
@@ -198,7 +197,7 @@ public final class BinderTransportSecurity {
       // TODO(10669): evaluate if there should be at most a single pending authorization check per
       //  (uid, serviceName) pair at any given time.
       ListenableFuture<Status> authorization =
-          serverPolicyChecker.checkAuthorizationForServiceAsync(uid, serviceName);
+          serverPolicyChecker.checkAuthorizationForServiceAsync(uid, serviceName, offloadExecutor);
       if (useCache) {
         serviceAuthorization.putIfAbsent(serviceName, authorization);
         Futures.addCallback(authorization, new FutureCallback<Status>() {
@@ -238,6 +237,6 @@ public final class BinderTransportSecurity {
      * @return a future with the result of the authorization check. A failed future represents a
      *    failure to perform the authorization check, not that the access is denied.
      */
-    ListenableFuture<Status> checkAuthorizationForServiceAsync(int uid, String serviceName);
+    ListenableFuture<Status> checkAuthorizationForServiceAsync(int uid, String serviceName, Executor executor);
   }
 }

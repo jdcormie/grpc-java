@@ -40,7 +40,8 @@ public class BinderInternal {
    * interface to check security policies without causing hard dependencies on a specific class.
    */
   public static BinderTransportSecurity.ServerPolicyChecker createPolicyChecker(
-          ServerSecurityPolicy securityPolicy, Executor executor) {
-    return (uid, serviceName) -> securityPolicy.checkAuthorizationForServiceAsync(uid, serviceName, executor);
+      ServerSecurityPolicy securityPolicy) {
+    return (uid, serviceName, executor) ->
+        securityPolicy.checkAuthorizationForServiceAsync(uid, serviceName, executor);
   }
 }
