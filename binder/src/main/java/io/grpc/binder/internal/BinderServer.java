@@ -78,7 +78,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private ScheduledExecutorService executorService;
 
   @GuardedBy("this")
-  private Executor offloadExecutor;
+  private Executor offloadExecutor; // != null between start() and onTermination().
 
   @GuardedBy("this")
   private boolean shutdown;
@@ -172,7 +172,8 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
                   .set(BinderTransport.REMOTE_UID, callingUid)
                   .set(BinderTransport.SERVER_AUTHORITY, listenAddress.getAuthority())
                   .set(BinderTransport.INBOUND_PARCELABLE_POLICY, inboundParcelablePolicy);
-          BinderTransportSecurity.attachAuthAttrs(attrsBuilder, callingUid, serverPolicyChecker, offloadExecutor);
+          BinderTransportSecurity.attachAuthAttrs(attrsBuilder, callingUid, serverPolicyChecker,
+              offloadExecutor);
           // Create a new transport and let our listener know about it.
           BinderTransport.BinderServerTransport transport =
               new BinderTransport.BinderServerTransport(

@@ -222,7 +222,7 @@ public final class BinderTransportSecurity {
    *
    * <p>This class provides the asynchronous version of {@link io.grpc.binder.SecurityPolicy},
    * allowing implementations of authorization logic that involves slow or asynchronous calls
-   * without blocking the calling thread.
+   * without ever blocking the calling thread.
    *
    * @see io.grpc.binder.SecurityPolicy
    */
