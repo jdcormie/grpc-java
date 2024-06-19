@@ -4,6 +4,7 @@ plugins {
     id 'com.google.protobuf' version '0.9.4'
     // Generate IntelliJ IDEA's .idea & .iml project files
     id 'idea'
+    id 'java'
 }
 
 repositories {
@@ -26,11 +27,19 @@ java {
 // updating the version in our release process.
 def grpcVersion = '1.66.0-SNAPSHOT' // CURRENT_GRPC_VERSION
 def protocVersion = '3.25.1'
+def openTelemetryVersion = '1.38.0'
+def openTelemetryPrometheusVersion = '1.38.0-alpha'
 
 dependencies {
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "io.grpc:grpc-gcp-csm-observability:${grpcVersion}"
+    implementation "io.opentelemetry:opentelemetry-sdk:${openTelemetryVersion}"
+    implementation "io.opentelemetry:opentelemetry-sdk-metrics:${openTelemetryVersion}"
+    implementation "io.opentelemetry:opentelemetry-exporter-logging:${openTelemetryVersion}"
+    implementation "io.opentelemetry:opentelemetry-exporter-prometheus:${openTelemetryPrometheusVersion}"
     compileOnly "org.apache.tomcat:annotations-api:6.0.53"
+    runtimeOnly "io.grpc:grpc-xds:${grpcVersion}"
     runtimeOnly "io.grpc:grpc-netty-shaded:${grpcVersion}"
 }
 
@@ -44,36 +53,26 @@ protobuf {
     }
 }
 
-// Inform IDEs like IntelliJ IDEA, Eclipse or NetBeans about the generated code.
-sourceSets {
-    main {
-        java {
-            srcDirs 'build/generated/source/proto/main/grpc'
-            srcDirs 'build/generated/source/proto/main/java'
-        }
-    }
-}
-
 startScripts.enabled = false
 
-task helloWorldTlsServer(type: CreateStartScripts) {
-    mainClass = 'io.grpc.examples.helloworldtls.HelloWorldServerTls'
-    applicationName = 'hello-world-tls-server'
+task CsmObservabilityHelloWorldServer(type: CreateStartScripts) {
+    mainClass = 'io.grpc.examples.csmobservability.CsmObservabilityServer'
+    applicationName = 'csm-observability-server'
     outputDir = new File(project.buildDir, 'tmp/scripts/' + name)
     classpath = startScripts.classpath
 }
 
-task helloWorldTlsClient(type: CreateStartScripts) {
-    mainClass = 'io.grpc.examples.helloworldtls.HelloWorldClientTls'
-    applicationName = 'hello-world-tls-client'
+task CsmObservabilityHelloWorldClient(type: CreateStartScripts) {
+    mainClass = 'io.grpc.examples.csmobservability.CsmObservabilityClient'
+    applicationName = 'csm-observability-client'
     outputDir = new File(project.buildDir, 'tmp/scripts/' + name)
     classpath = startScripts.classpath
 }
 
 application {
     applicationDistribution.into('bin') {
-        from(helloWorldTlsServer)
-        from(helloWorldTlsClient)
+        from(CsmObservabilityHelloWorldServer)
+        from(CsmObservabilityHelloWorldClient)
         fileMode = 0755
     }
 }

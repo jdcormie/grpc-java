@@ -20,7 +20,6 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-
 import io.grpc.Attributes;
 import io.grpc.Internal;
 import io.grpc.Metadata;
@@ -32,7 +31,6 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import io.grpc.internal.GrpcAttributes;
-
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -70,16 +68,19 @@ public final class BinderTransportSecurity {
    * @param builder The {@link Attributes.Builder} for the transport being created.
    * @param remoteUid The remote UID of the transport.
    * @param serverPolicyChecker The policy checker for this transport.
+   * @param executor used for calling into the application. Must outlive the transport.
    * @param offloadExecutor used for blocking or expensive work if necessary
    */
   @Internal
   public static void attachAuthAttrs(
-      Attributes.Builder builder, int remoteUid, ServerPolicyChecker serverPolicyChecker,
-      Executor offloadExecutor) {
+      Attributes.Builder builder,
+      int remoteUid,
+      ServerPolicyChecker serverPolicyChecker,
+      Executor executor) {
     builder
         .set(
             TRANSPORT_AUTHORIZATION_STATE,
-            new TransportAuthorizationState(remoteUid, serverPolicyChecker, offloadExecutor))
+            new TransportAuthorizationState(remoteUid, serverPolicyChecker, executor, offloadExecutor))
         .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY);
   }
 
@@ -92,17 +93,17 @@ public final class BinderTransportSecurity {
     @Override
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
         ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
-      TransportAuthorizationState transpoAuthState =
+      TransportAuthorizationState transportAuthState =
           call.getAttributes().get(TRANSPORT_AUTHORIZATION_STATE);
       ListenableFuture<Status> authStatusFuture =
-          transpoAuthState.checkAuthorization(call.getMethodDescriptor());
+          transportAuthState.checkAuthorization(call.getMethodDescriptor());
 
       // Most SecurityPolicy will have synchronous implementations that provide an
       // immediately-resolved Future. In that case, short-circuit to avoid unnecessary allocations
       // and asynchronous code if the authorization result is already present.
       if (!authStatusFuture.isDone()) {
         return newServerCallListenerForPendingAuthResult(authStatusFuture,
-            transpoAuthState.offloadExecutor, call, headers, next);
+            transpoAuthState.executor, call, headers, next);
       }
 
       Status authStatus;
@@ -126,32 +127,33 @@ public final class BinderTransportSecurity {
     }
 
     private <ReqT, RespT> ServerCall.Listener<ReqT> newServerCallListenerForPendingAuthResult(
-            ListenableFuture<Status> authStatusFuture,
-            Executor offloadExecutor,
-            ServerCall<ReqT, RespT> call,
-            Metadata headers,
-            ServerCallHandler<ReqT, RespT> next) {
+        ListenableFuture<Status> authStatusFuture,
+        Executor executor,
+        ServerCall<ReqT, RespT> call,
+        Metadata headers,
+        ServerCallHandler<ReqT, RespT> next) {
       PendingAuthListener<ReqT, RespT> listener = new PendingAuthListener<>();
       Futures.addCallback(
-              authStatusFuture,
-              new FutureCallback<Status>() {
-                @Override
-                public void onSuccess(Status authStatus) {
-                  if (!authStatus.isOk()) {
-                    call.close(authStatus, new Metadata());
-                    return;
-                  }
+          authStatusFuture,
+          new FutureCallback<Status>() {
+            @Override
+            public void onSuccess(Status authStatus) {
+              if (!authStatus.isOk()) {
+                call.close(authStatus, new Metadata());
+                return;
+              }
 
-                  listener.startCall(call, headers, next);
-                }
+              listener.startCall(call, headers, next);
+            }
 
-                @Override
-                public void onFailure(Throwable t) {
-                  call.close(
-                          Status.INTERNAL.withCause(t).withDescription("Authorization future failed"),
-                          new Metadata());
-                }
-              }, offloadExecutor);
+            @Override
+            public void onFailure(Throwable t) {
+              call.close(
+                  Status.INTERNAL.withCause(t).withDescription("Authorization future failed"),
+                  new Metadata());
+            }
+          },
+          executor);
       return listener;
     }
   }
@@ -164,15 +166,18 @@ public final class BinderTransportSecurity {
     private final int uid;
     private final ServerPolicyChecker serverPolicyChecker;
     private final ConcurrentHashMap<String, ListenableFuture<Status>> serviceAuthorization;
+    private final Executor executor;
     private final Executor offloadExecutor;
 
     /**
+     * @param executor used for calling into the application. Must outlive the transport.
      * @param offloadExecutor must remain valid for the lifetime of the associated transport
      */
     TransportAuthorizationState(int uid, ServerPolicyChecker serverPolicyChecker,
-        Executor offloadExecutor) {
+        Executor executor, Executor offloadExecutor) {
       this.uid = uid;
       this.serverPolicyChecker = serverPolicyChecker;
+      this.executor = executor;
       this.offloadExecutor = offloadExecutor;
       serviceAuthorization = new ConcurrentHashMap<>(8);
     }

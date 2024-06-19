@@ -32,7 +32,6 @@ import io.grpc.internal.FixedObjectPool;
 import io.grpc.internal.ServerImplBuilder;
 
 import java.io.File;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
@@ -183,6 +182,7 @@ public final class BinderServerBuilder
     isBuilt = true;
     // We install the security interceptor last, so it's closest to the transport.
     BinderTransportSecurity.installAuthInterceptor(this);
+    internalBuilder.setExecutorPool(serverImplBuilder.getExecutorPool());
     return super.build();
   }
 }
