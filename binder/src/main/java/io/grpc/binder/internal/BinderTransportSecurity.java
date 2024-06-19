@@ -100,9 +100,9 @@ public final class BinderTransportSecurity {
       ListenableFuture<Status> authStatusFuture =
           transportAuthState.checkAuthorization(call.getMethodDescriptor());
 
-      // Authorization decisions are cached and so this future will commonly already be complete.
-      // In that case, we have a fast path below that avoids unnecessary allocations and
-      // asynchronous code if the authorization result is already known.
+      // Auth decisions are cached so this future will often already be complete. In that case, we
+      // use a fast path below that avoids unnecessary allocations and asynchronous code if the
+      // authorization result is already known.
       if (!authStatusFuture.isDone()) {
         return newServerCallListenerForPendingAuthResult(
             authStatusFuture, transportAuthState.executor, call, headers, next);
@@ -173,7 +173,7 @@ public final class BinderTransportSecurity {
 
     /**
      * @param executor used for calling into the application. Must outlive the transport.
-     * @param offloadExecutor must remain valid for the lifetime of the associated transport
+     * @param offloadExecutor used to check a non-async SecurityPolicy. Must outlive the transport.
      */
     TransportAuthorizationState(
         int uid,
