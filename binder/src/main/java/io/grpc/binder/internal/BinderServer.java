@@ -64,8 +64,8 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private static final Logger logger = Logger.getLogger(BinderServer.class.getName());
 
   private final ObjectPool<ScheduledExecutorService> executorServicePool;
-  private final ObjectPool<? extends Executor> offloadExecutorPool;
   private final ObjectPool<? extends Executor> executorPool;
+  private final ObjectPool<? extends Executor> offloadExecutorPool;
 
   private final ImmutableList<ServerStreamTracer.Factory> streamTracerFactories;
   private final AndroidComponentAddress listenAddress;
@@ -83,8 +83,9 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   @GuardedBy("this")
   private Executor executor;
 
+  @Nullable // Before start() and after termination.
   @GuardedBy("this")
-  private Executor offloadExecutor; // != null between start() and onTermination().
+  private Executor offloadExecutor;
 
   @GuardedBy("this")
   private boolean shutdown;
