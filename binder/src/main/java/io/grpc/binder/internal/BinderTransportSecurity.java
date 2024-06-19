@@ -76,7 +76,8 @@ public final class BinderTransportSecurity {
       Attributes.Builder builder,
       int remoteUid,
       ServerPolicyChecker serverPolicyChecker,
-      Executor executor) {
+      Executor executor,
+      Executor offloadExecutor) {
     builder
         .set(
             TRANSPORT_AUTHORIZATION_STATE,
@@ -98,12 +99,11 @@ public final class BinderTransportSecurity {
       ListenableFuture<Status> authStatusFuture =
           transportAuthState.checkAuthorization(call.getMethodDescriptor());
 
-      // Most SecurityPolicy will have synchronous implementations that provide an
-      // immediately-resolved Future. In that case, short-circuit to avoid unnecessary allocations
-      // and asynchronous code if the authorization result is already present.
+      // Authorization decisions are cached and so this future will commonly already be complete.
+      // In that case, we have a fast path below that avoids unnecessary allocations and
+      // asynchronous code if the authorization result is already known.
       if (!authStatusFuture.isDone()) {
-        return newServerCallListenerForPendingAuthResult(authStatusFuture,
-            transpoAuthState.executor, call, headers, next);
+        return newServerCallListenerForPendingAuthResult(authStatusFuture, transportAuthState.executor, call, headers, next);
       }
 
       Status authStatus;

@@ -32,6 +32,7 @@ import io.grpc.internal.FixedObjectPool;
 import io.grpc.internal.ServerImplBuilder;
 
 import java.io.File;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
@@ -157,8 +158,8 @@ public final class BinderServerBuilder
    * <p>It's an optional parameter. If the user has not provided an executor when the channel is
    * built, the builder will use a static cached thread pool.
    *
-   * <p>The channel won't take ownership of the given executor. Callers must ensure that it lives at
-   * least as long as the servers you build.
+   * <p>The channel won't take ownership of the given executor. Callers must ensure that it lives
+   * until the servers you build terminate.
    *
    * @return this
    */
