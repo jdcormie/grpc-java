@@ -101,7 +101,7 @@ public final class BinderTransportSecurity {
           transportAuthState.checkAuthorization(call.getMethodDescriptor());
 
       // Auth decisions are cached so this future will often already be complete. In that case, we
-      // use a fast path below that avoids unnecessary allocations and asynchronous code if the
+      // use a fast path below that avoids unnecessary allocations and asynchronous code since the
       // authorization result is already known.
       if (!authStatusFuture.isDone()) {
         return newServerCallListenerForPendingAuthResult(
