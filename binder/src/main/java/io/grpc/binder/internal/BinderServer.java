@@ -93,8 +93,10 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     this.listenAddress = checkNotNull(builder.listenAddress);
     this.executorPool = checkNotNull(builder.executorPool);
     this.executorServicePool = builder.executorServicePool;
-    this.offloadExecutorPool = builder.offloadExecutorPool != null ?
-        builder.offloadExecutorPool : builder.executorServicePool;
+    this.offloadExecutorPool =
+        builder.offloadExecutorPool != null
+            ? builder.offloadExecutorPool
+            : builder.executorServicePool;
     this.streamTracerFactories =
         ImmutableList.copyOf(checkNotNull(builder.streamTracerFactories, "streamTracerFactories"));
     this.serverPolicyChecker = BinderInternal.createPolicyChecker(builder.serverSecurityPolicy);

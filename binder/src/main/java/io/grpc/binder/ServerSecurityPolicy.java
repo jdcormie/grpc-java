@@ -72,8 +72,8 @@ public final class ServerSecurityPolicy {
    *     failure to perform the authorization check, not that the access is denied.
    */
   @CheckReturnValue
-  ListenableFuture<Status> checkAuthorizationForServiceAsync(int uid, String serviceName,
-      Executor offloadExecutor) {
+  ListenableFuture<Status> checkAuthorizationForServiceAsync(
+      int uid, String serviceName, Executor offloadExecutor) {
     SecurityPolicy securityPolicy = perServicePolicies.getOrDefault(serviceName, defaultPolicy);
     if (securityPolicy instanceof AsyncSecurityPolicy) {
       return ((AsyncSecurityPolicy) securityPolicy).checkAuthorizationAsync(uid);

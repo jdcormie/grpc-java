@@ -18,11 +18,9 @@ package io.grpc.binder;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
-
 import static org.junit.Assert.fail;
 import static org.robolectric.Shadows.shadowOf;
 
-import android.app.Application;
 import android.os.Looper;
 import android.os.Process;
 import androidx.core.content.ContextCompat;
@@ -32,19 +30,17 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Uninterruptibles;
-
 import io.grpc.Status;
-import java.util.concurrent.Executor;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
 
 @RunWith(RobolectricTestRunner.class)
 public final class ServerSecurityPolicyTest {
@@ -57,8 +53,8 @@ public final class ServerSecurityPolicyTest {
   private static final int OTHER_UID = MY_UID + 1;
 
   ServerSecurityPolicy policy;
-  final Executor executor = ContextCompat.getMainExecutor(
-      ApplicationProvider.getApplicationContext());
+  final Executor executor =
+      ContextCompat.getMainExecutor(ApplicationProvider.getApplicationContext());
 
   @Test
   public void testDefaultInternalOnly() throws Exception {
@@ -157,13 +153,15 @@ public final class ServerSecurityPolicyTest {
   public void testPerServiceAsync() throws Exception {
     policy =
         ServerSecurityPolicy.newBuilder()
-            .servicePolicy(SERVICE2, asyncPolicy(uid -> {
-                // Add some extra future transformation to confirm that a chain
-                // of futures gets properly handled.
-                ListenableFuture<Void> dependency = Futures.immediateVoidFuture();
-                return Futures
-                        .transform(dependency, unused -> Status.OK, executor);
-            }))
+            .servicePolicy(
+                SERVICE2,
+                asyncPolicy(
+                    uid -> {
+                      // Add some extra future transformation to confirm that a chain
+                      // of futures gets properly handled.
+                      ListenableFuture<Void> dependency = Futures.immediateVoidFuture();
+                      return Futures.transform(dependency, unused -> Status.OK, executor);
+                    }))
             .build();
 
     assertThat(checkAuthorizationForServiceAsync(policy, MY_UID, SERVICE1))
@@ -339,9 +337,7 @@ public final class ServerSecurityPolicyTest {
    * dealing with concurrency details. Returns a {link @Status.Code} for convenience.
    */
   private Status.Code checkAuthorizationForServiceAsync(
-          ServerSecurityPolicy policy,
-          int callerUid,
-          String service) throws ExecutionException {
+      ServerSecurityPolicy policy, int callerUid, String service) throws ExecutionException {
     ListenableFuture<Status> statusFuture =
         policy.checkAuthorizationForServiceAsync(callerUid, service, executor);
     shadowOf(Looper.getMainLooper()).idle();

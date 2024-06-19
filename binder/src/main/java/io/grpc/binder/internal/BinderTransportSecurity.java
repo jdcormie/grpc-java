@@ -81,7 +81,8 @@ public final class BinderTransportSecurity {
     builder
         .set(
             TRANSPORT_AUTHORIZATION_STATE,
-            new TransportAuthorizationState(remoteUid, serverPolicyChecker, executor, offloadExecutor))
+            new TransportAuthorizationState(
+                remoteUid, serverPolicyChecker, executor, offloadExecutor))
         .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY);
   }
 
@@ -103,7 +104,8 @@ public final class BinderTransportSecurity {
       // In that case, we have a fast path below that avoids unnecessary allocations and
       // asynchronous code if the authorization result is already known.
       if (!authStatusFuture.isDone()) {
-        return newServerCallListenerForPendingAuthResult(authStatusFuture, transportAuthState.executor, call, headers, next);
+        return newServerCallListenerForPendingAuthResult(
+            authStatusFuture, transportAuthState.executor, call, headers, next);
       }
 
       Status authStatus;
@@ -173,8 +175,11 @@ public final class BinderTransportSecurity {
      * @param executor used for calling into the application. Must outlive the transport.
      * @param offloadExecutor must remain valid for the lifetime of the associated transport
      */
-    TransportAuthorizationState(int uid, ServerPolicyChecker serverPolicyChecker,
-        Executor executor, Executor offloadExecutor) {
+    TransportAuthorizationState(
+        int uid,
+        ServerPolicyChecker serverPolicyChecker,
+        Executor executor,
+        Executor offloadExecutor) {
       this.uid = uid;
       this.serverPolicyChecker = serverPolicyChecker;
       this.executor = executor;
@@ -245,9 +250,9 @@ public final class BinderTransportSecurity {
      * @param serviceName The name of the gRPC service being called.
      * @param offloadExecutor used for blocking or expensive work if necessary
      * @return a future with the result of the authorization check. A failed future represents a
-     *    failure to perform the authorization check, not that the access is denied.
+     *     failure to perform the authorization check, not that the access is denied.
      */
-    ListenableFuture<Status> checkAuthorizationForServiceAsync(int uid, String serviceName,
-        Executor offloadExecutor);
+    ListenableFuture<Status> checkAuthorizationForServiceAsync(
+        int uid, String serviceName, Executor offloadExecutor);
   }
 }
