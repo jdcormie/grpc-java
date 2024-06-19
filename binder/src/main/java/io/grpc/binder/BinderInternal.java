@@ -40,7 +40,6 @@ public class BinderInternal {
    */
   public static BinderTransportSecurity.ServerPolicyChecker createPolicyChecker(
           ServerSecurityPolicy securityPolicy) {
-    return (uid, serviceName, executor) ->
-        securityPolicy.checkAuthorizationForServiceAsync(uid, serviceName, executor);
+    return securityPolicy::checkAuthorizationForServiceAsync;
   }
 }

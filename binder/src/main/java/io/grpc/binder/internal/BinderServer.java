@@ -290,7 +290,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     /**
      * Sets the executor to be used for blocking work.
      *
-     * <p>Optional. If unset, 'executorServicePool' will be used for this work (not recommended).
+     * <p>Optional. If unset, 'executorPool' will be used for this work (not recommended).
      */
     public Builder setOffloadExecutorPool(ObjectPool<? extends Executor> offloadExecutorPool) {
       this.offloadExecutorPool = offloadExecutorPool;
