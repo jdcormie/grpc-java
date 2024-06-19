@@ -69,7 +69,7 @@ public final class BinderTransportSecurity {
    * @param remoteUid The remote UID of the transport.
    * @param serverPolicyChecker The policy checker for this transport.
    * @param executor used for calling into the application. Must outlive the transport.
-   * @param offloadExecutor used for blocking or expensive work if necessary
+   * @param offloadExecutor used for blocking or expensive work. Must outlive the transport.
    */
   @Internal
   public static void attachAuthAttrs(
