@@ -31,6 +31,7 @@ import io.grpc.binder.internal.BinderTransportSecurity;
 import io.grpc.internal.FixedObjectPool;
 import io.grpc.internal.ServerImplBuilder;
 import java.io.File;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 /** Builder for a server that services requests from an Android Service. */
@@ -139,6 +140,26 @@ public final class BinderServerBuilder extends ForwardingServerBuilder<BinderSer
   @Override
   public BinderServerBuilder useTransportSecurity(File certChain, File privateKey) {
     throw new UnsupportedOperationException("TLS not supported in BinderServer");
+  }
+
+  /**
+   * Provides a custom executor that will be used for operations that block or are expensive, to
+   * avoid doing such things on asynchronous code paths. For example, {@link SecurityPolicy}s may be
+   * evaluated on this executor (many implementations require one or more blocking IPC round trips
+   * to Android's system server).
+   *
+   * <p>It's an optional parameter. If the user has not provided an executor when the channel is
+   * built, the builder will use a static cached thread pool.
+   *
+   * <p>The channel won't take ownership of the given executor. Callers must ensure that it lives
+   * until the servers you build terminate.
+   *
+   * @return this
+   */
+  public BinderServerBuilder offloadExecutor(Executor executor) {
+    internalBuilder.setOffloadExecutorPool(
+        new FixedObjectPool<>(checkNotNull(executor, "offloadExecutor")));
+    return this;
   }
 
   /**

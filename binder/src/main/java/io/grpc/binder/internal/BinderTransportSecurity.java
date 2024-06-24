@@ -69,17 +69,20 @@ public final class BinderTransportSecurity {
    * @param remoteUid The remote UID of the transport.
    * @param serverPolicyChecker The policy checker for this transport.
    * @param executor used for calling into the application. Must outlive the transport.
+   * @param offloadExecutor used for blocking or expensive work. Must outlive the transport.
    */
   @Internal
   public static void attachAuthAttrs(
       Attributes.Builder builder,
       int remoteUid,
       ServerPolicyChecker serverPolicyChecker,
-      Executor executor) {
+      Executor executor,
+      Executor offloadExecutor) {
     builder
         .set(
             TRANSPORT_AUTHORIZATION_STATE,
-            new TransportAuthorizationState(remoteUid, serverPolicyChecker, executor))
+            new TransportAuthorizationState(
+                remoteUid, serverPolicyChecker, executor, offloadExecutor))
         .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.PRIVACY_AND_INTEGRITY);
   }
 
@@ -97,9 +100,9 @@ public final class BinderTransportSecurity {
       ListenableFuture<Status> authStatusFuture =
           transportAuthState.checkAuthorization(call.getMethodDescriptor());
 
-      // Most SecurityPolicy will have synchronous implementations that provide an
-      // immediately-resolved Future. In that case, short-circuit to avoid unnecessary allocations
-      // and asynchronous code if the authorization result is already present.
+      // Auth decisions are cached so this future will often already be complete. In that case, we
+      // use a fast path below that avoids unnecessary allocations and asynchronous code since the
+      // authorization result is already known.
       if (!authStatusFuture.isDone()) {
         return newServerCallListenerForPendingAuthResult(
             authStatusFuture, transportAuthState.executor, call, headers, next);
@@ -166,15 +169,21 @@ public final class BinderTransportSecurity {
     private final ServerPolicyChecker serverPolicyChecker;
     private final ConcurrentHashMap<String, ListenableFuture<Status>> serviceAuthorization;
     private final Executor executor;
+    private final Executor offloadExecutor;
 
     /**
      * @param executor used for calling into the application. Must outlive the transport.
+     * @param offloadExecutor used to check a non-async SecurityPolicy. Must outlive the transport.
      */
     TransportAuthorizationState(
-        int uid, ServerPolicyChecker serverPolicyChecker, Executor executor) {
+        int uid,
+        ServerPolicyChecker serverPolicyChecker,
+        Executor executor,
+        Executor offloadExecutor) {
       this.uid = uid;
       this.serverPolicyChecker = serverPolicyChecker;
       this.executor = executor;
+      this.offloadExecutor = offloadExecutor;
       serviceAuthorization = new ConcurrentHashMap<>(8);
     }
 
@@ -202,7 +211,7 @@ public final class BinderTransportSecurity {
       // TODO(10669): evaluate if there should be at most a single pending authorization check per
       //  (uid, serviceName) pair at any given time.
       ListenableFuture<Status> authorization =
-          serverPolicyChecker.checkAuthorizationForServiceAsync(uid, serviceName);
+          serverPolicyChecker.checkAuthorizationForServiceAsync(uid, serviceName, offloadExecutor);
       if (useCache) {
         serviceAuthorization.putIfAbsent(serviceName, authorization);
         Futures.addCallback(
@@ -227,7 +236,7 @@ public final class BinderTransportSecurity {
    *
    * <p>This class provides the asynchronous version of {@link io.grpc.binder.SecurityPolicy},
    * allowing implementations of authorization logic that involves slow or asynchronous calls
-   * without necessarily blocking the calling thread.
+   * without ever blocking the calling thread.
    *
    * @see io.grpc.binder.SecurityPolicy
    */
@@ -238,11 +247,15 @@ public final class BinderTransportSecurity {
      * <p>This method never throws an exception. If the execution of the security policy check
      * fails, a failed future with such exception is returned.
      *
+     * <p>This method never blocks the calling thread.
+     *
      * @param uid The Android UID to authenticate.
      * @param serviceName The name of the gRPC service being called.
+     * @param offloadExecutor used for blocking or expensive work if necessary
      * @return a future with the result of the authorization check. A failed future represents a
      *     failure to perform the authorization check, not that the access is denied.
      */
-    ListenableFuture<Status> checkAuthorizationForServiceAsync(int uid, String serviceName);
+    ListenableFuture<Status> checkAuthorizationForServiceAsync(
+        int uid, String serviceName, Executor offloadExecutor);
   }
 }
