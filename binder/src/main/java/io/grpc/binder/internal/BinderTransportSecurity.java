@@ -41,8 +41,8 @@ import javax.annotation.Nullable;
 /**
  * Manages security for an Android Service hosted gRPC server.
  *
- * <p>Attaches authorization state to a newly-created transport, and contains a
- * ServerInterceptor which ensures calls are authorized before allowing them to proceed.
+ * <p>Attaches authorization state to a newly-created transport, and contains a ServerInterceptor
+ * which ensures calls are authorized before allowing them to proceed.
  */
 public final class BinderTransportSecurity {
 
@@ -214,15 +214,18 @@ public final class BinderTransportSecurity {
           serverPolicyChecker.checkAuthorizationForServiceAsync(uid, serviceName, offloadExecutor);
       if (useCache) {
         serviceAuthorization.putIfAbsent(serviceName, authorization);
-        Futures.addCallback(authorization, new FutureCallback<Status>() {
-          @Override
-          public void onSuccess(Status result) {}
+        Futures.addCallback(
+            authorization,
+            new FutureCallback<Status>() {
+              @Override
+              public void onSuccess(Status result) {}
 
-          @Override
-          public void onFailure(Throwable t) {
-            serviceAuthorization.remove(serviceName, authorization);
-          }
-        }, MoreExecutors.directExecutor());
+              @Override
+              public void onFailure(Throwable t) {
+                serviceAuthorization.remove(serviceName, authorization);
+              }
+            },
+            MoreExecutors.directExecutor());
       }
       return authorization;
     }

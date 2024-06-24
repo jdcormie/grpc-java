@@ -56,7 +56,7 @@ import javax.annotation.concurrent.ThreadSafe;
  *
  * <p>Multiple incoming connections transports may be active at a time.
  *
- * <b>IMPORTANT</b>: This implementation must comply with this published wire format.
+ * <p><b>IMPORTANT</b>: This implementation must comply with this published wire format.
  * https://github.com/grpc/proposal/blob/master/L73-java-binderchannel/wireformat.md
  */
 @ThreadSafe
@@ -194,7 +194,9 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
           // Create a new transport and let our listener know about it.
           BinderTransport.BinderServerTransport transport =
               new BinderTransport.BinderServerTransport(
-                  executorServicePool, attrsBuilder.build(), streamTracerFactories,
+                  executorServicePool,
+                  attrsBuilder.build(),
+                  streamTracerFactories,
                   OneWayBinderProxy.IDENTITY_DECORATOR,
                   callbackBinder);
           transport.setServerTransportListener(listener.transportCreated(transport));
@@ -261,7 +263,8 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
      *
      * <p>Required.
      */
-    public Builder setStreamTracerFactories(List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
+    public Builder setStreamTracerFactories(
+        List<? extends ServerStreamTracer.Factory> streamTracerFactories) {
       this.streamTracerFactories = streamTracerFactories;
       return this;
     }
@@ -300,7 +303,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     /**
      * Sets the {@link ServerSecurityPolicy} to be used for built servers.
      *
-     * Optional, {@link SecurityPolicies#serverInternalOnly()} is the default.
+     * <p>Optional, {@link SecurityPolicies#serverInternalOnly()} is the default.
      */
     public Builder setServerSecurityPolicy(ServerSecurityPolicy serverSecurityPolicy) {
       this.serverSecurityPolicy = checkNotNull(serverSecurityPolicy, "serverSecurityPolicy");
@@ -310,10 +313,11 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     /**
      * Sets the {@link InboundParcelablePolicy} to be used for built servers.
      *
-     * Optional, {@link InboundParcelablePolicy#DEFAULT} is the default.
+     * <p>Optional, {@link InboundParcelablePolicy#DEFAULT} is the default.
      */
     public Builder setInboundParcelablePolicy(InboundParcelablePolicy inboundParcelablePolicy) {
-      this.inboundParcelablePolicy = checkNotNull(inboundParcelablePolicy, "inboundParcelablePolicy");
+      this.inboundParcelablePolicy =
+          checkNotNull(inboundParcelablePolicy, "inboundParcelablePolicy");
       return this;
     }
   }
