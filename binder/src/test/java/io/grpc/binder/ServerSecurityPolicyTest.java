@@ -19,7 +19,9 @@ package io.grpc.binder;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
+import static org.robolectric.Shadows.shadowOf;
 
+import android.os.Looper;
 import android.os.Process;
 import androidx.core.content.ContextCompat;
 import androidx.test.core.app.ApplicationProvider;
@@ -346,7 +348,6 @@ public final class ServerSecurityPolicyTest {
         policy.checkAuthorizationForServiceAsync(callerUid, service, executor);
     shadowOf(Looper.getMainLooper()).idle();
     return Futures.getDone(statusFuture).getCode();
-    // return Uninterruptibles.getUninterruptibly(statusFuture).getCode();
   }
 
   private static SecurityPolicy policy(Function<Integer, Status> func) {
