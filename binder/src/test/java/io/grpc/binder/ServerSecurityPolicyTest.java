@@ -28,8 +28,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-
-import com.google.common.util.concurrent.Uninterruptibles;
 import io.grpc.Status;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CancellationException;
@@ -159,8 +157,7 @@ public final class ServerSecurityPolicyTest {
                       // Add some extra future transformation to confirm that a chain
                       // of futures gets properly handled.
                       ListenableFuture<Void> dependency = Futures.immediateVoidFuture();
-                      return Futures.transform(
-                          dependency, unused -> Status.OK, executor);
+                      return Futures.transform(dependency, unused -> Status.OK, executor);
                     }))
             .build();
 
