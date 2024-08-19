@@ -46,6 +46,7 @@ public final class NameResolverRegistry {
   private static final Logger logger = Logger.getLogger(NameResolverRegistry.class.getName());
   private static NameResolverRegistry instance;
 
+  private final NameResolverRegistry parent;
   private final NameResolver.Factory factory = new NameResolverFactory();
   private static final String UNKNOWN_SCHEME = "unknown";
   @GuardedBy("this")
@@ -58,6 +59,27 @@ public final class NameResolverRegistry {
   @GuardedBy("this")
   private ImmutableMap<String, NameResolverProvider> effectiveProviders = ImmutableMap.of();
 
+  /**
+   * Creates a new empty registry.
+   */
+  public NameResolverRegistry() {
+    this(null);
+  }
+
+  /**
+   * Decorates another {@link NameResolverRegistry} without actually modifying it.
+   *
+   * <p>Lookups will consult both this registry and the parent registry, and will return the highest
+   * priority matching provider between the two of them. This is most useful when 'parent' is the
+   * default registry and modifying that global variable would be inappropriate.
+   *
+   * @param parent another registry to decorate
+   */
+  @Internal
+  public NameResolverRegistry(NameResolverRegistry parent) {
+    this.parent = parent;
+  }
+
   public synchronized String getDefaultScheme() {
     return defaultScheme;
   }
@@ -66,7 +88,14 @@ public final class NameResolverRegistry {
     if (scheme == null) {
       return null;
     }
-    return providers().get(scheme.toLowerCase(Locale.US));
+    NameResolverProvider parentResult = (parent != null)
+        ? parent.getProviderForScheme(scheme) : null;
+    NameResolverProvider selfResult = providers().get(scheme.toLowerCase(Locale.US));
+    return (priorityOf(parentResult) >  priorityOf(selfResult)) ? parentResult : selfResult;
+  }
+
+  private static int priorityOf(NameResolverProvider provider) {
+    return provider != null ? provider.priority() : Integer.MIN_VALUE;
   }
 
   /**

@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.Assert.fail;
 
 import android.content.Context;
 import android.content.Intent;
@@ -59,6 +60,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.After;
@@ -240,6 +242,20 @@ public final class BinderChannelSmokeTest {
   }
 
   @Test
+  public void testConnectViaIntentTargetUri() throws Exception {
+    // TODO(jdcormie): Make this test good.
+    channel = BinderChannelBuilder.forTarget("intent://foo/bar", appContext).build();
+    ListenableFuture<String> resultFuture = doCall("Hello");
+    try {
+      resultFuture.get();
+      fail();
+    } catch (ExecutionException ee) {
+      StatusRuntimeException sre = (StatusRuntimeException) ee.getCause();
+      assertThat(sre.getStatus().getCode()).isEqualTo(Code.UNIMPLEMENTED);
+    }
+  }
+
+  @Test
   public void testConnectViaIntentFilter() throws Exception {
     // Compare with the <intent-filter> mapping in AndroidManifest.xml.
     channel =
@@ -263,7 +279,7 @@ public final class BinderChannelSmokeTest {
     CallOptions callOptions = CallOptions.DEFAULT.withDeadlineAfter(5, SECONDS);
     try {
       ClientCalls.blockingUnaryCall(interceptedChannel, method, callOptions, "hello");
-      Assert.fail();
+      fail();
     } catch (StatusRuntimeException e) {
       // We don't care how *our* RPC failed, but make sure we didn't have to rely on the deadline.
       assertThat(e.getStatus().getCode()).isNotEqualTo(Code.DEADLINE_EXCEEDED);
@@ -278,7 +294,7 @@ public final class BinderChannelSmokeTest {
     CallOptions callOptions = CallOptions.DEFAULT.withDeadlineAfter(5, SECONDS);
     try {
       ClientCalls.blockingUnaryCall(channel, method, callOptions, "hello");
-      Assert.fail();
+      fail();
     } catch (StatusRuntimeException e) {
       // We don't care *how* our RPC failed, but make sure we didn't have to rely on the deadline.
       assertThat(e.getStatus().getCode()).isNotEqualTo(Code.DEADLINE_EXCEEDED);

@@ -429,7 +429,7 @@ public final class ManagedChannelImplBuilder
     return this;
   }
 
-  ManagedChannelImplBuilder nameResolverRegistry(NameResolverRegistry resolverRegistry) {
+  public ManagedChannelImplBuilder nameResolverRegistry(NameResolverRegistry resolverRegistry) {
     this.nameResolverRegistry = resolverRegistry;
     return this;
   }
@@ -929,5 +929,12 @@ public final class ManagedChannelImplBuilder
    */
   public ObjectPool<? extends Executor> getOffloadExecutorPool() {
     return this.offloadExecutorPool;
+  }
+
+  /**
+   *
+   */
+  public NameResolverRegistry getNameResolverRegistry() {
+    return nameResolverRegistry;
   }
 }
