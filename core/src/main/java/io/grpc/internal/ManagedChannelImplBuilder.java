@@ -932,7 +932,7 @@ public final class ManagedChannelImplBuilder
   }
 
   /**
-   *
+   * Returns the NameResolverRegistry.
    */
   public NameResolverRegistry getNameResolverRegistry() {
     return nameResolverRegistry;
