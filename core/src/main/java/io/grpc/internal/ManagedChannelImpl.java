@@ -2045,6 +2045,11 @@ final class ManagedChannelImpl extends ManagedChannel implements
       subchannel.updateAddresses(addrs);
     }
 
+    @Override
+    public Attributes getConnectedAddressAttributes() {
+      return subchannel.getConnectedAddressAttributes();
+    }
+
     private List<EquivalentAddressGroup> stripOverrideAuthorityAttributes(
         List<EquivalentAddressGroup> eags) {
       List<EquivalentAddressGroup> eagsWithoutOverrideAttr = new ArrayList<>();
