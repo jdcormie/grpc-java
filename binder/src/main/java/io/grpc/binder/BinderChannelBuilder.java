@@ -23,6 +23,7 @@ import android.content.Context;
 import android.os.UserHandle;
 import androidx.annotation.RequiresApi;
 import com.google.errorprone.annotations.DoNotCall;
+import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
 import io.grpc.ForwardingChannelBuilder;
 import io.grpc.ManagedChannel;
@@ -159,6 +160,7 @@ public final class BinderChannelBuilder extends ForwardingChannelBuilder<BinderC
 
   private final ManagedChannelImplBuilder managedChannelImplBuilder;
   private final BinderClientTransportFactory.Builder transportFactoryBuilder;
+  private final Attributes.Builder channelAttrBuilder = Attributes.newBuilder();
 
   private boolean strictLifecycleManagement;
 
@@ -179,6 +181,13 @@ public final class BinderChannelBuilder extends ForwardingChannelBuilder<BinderC
     } else {
       managedChannelImplBuilder =
           new ManagedChannelImplBuilder(target, transportFactoryBuilder, null);
+      if (target.startsWith("intent:")) {
+        // We register our resolver here instead of using SPI:
+        // 1) So the 99% of Android apps that don't use grpc-binder and don't use indirect
+        // addressing don't have to pay to load our classes.
+        // 2) It's our first opportunity to access the Application Context.
+        IntentNameResolverProvider.createAndRegisterSingletonOnce(sourceContext.getApplicationContext());
+      }
     }
     idleTimeout(60, TimeUnit.SECONDS);
   }
@@ -250,6 +259,7 @@ public final class BinderChannelBuilder extends ForwardingChannelBuilder<BinderC
   @RequiresApi(30)
   public BinderChannelBuilder bindAsUser(UserHandle targetUserHandle) {
     transportFactoryBuilder.setTargetUserHandle(targetUserHandle);
+    channelAttrBuilder.set(ApiConstants.CHANNEL_ATTR_TARGET_USER, targetUserHandle);
     return this;
   }
 
@@ -284,6 +294,7 @@ public final class BinderChannelBuilder extends ForwardingChannelBuilder<BinderC
   public ManagedChannel build() {
     transportFactoryBuilder.setOffloadExecutorPool(
         managedChannelImplBuilder.getOffloadExecutorPool());
+    managedChannelImplBuilder.setChannelAttributes(channelAttrBuilder.build());
     return super.build();
   }
 }

@@ -165,9 +165,17 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
       return this;
     }
 
+    public SecurityPolicy getSecurityPolicy() {
+      return securityPolicy;
+    }
+
     public Builder setTargetUserHandle(@Nullable UserHandle targetUserHandle) {
       this.targetUserHandle = targetUserHandle;
       return this;
+    }
+
+    public UserHandle getTargetUserHandle() {
+      return targetUserHandle;
     }
 
     public Builder setBindServiceFlags(BindServiceFlags bindServiceFlags) {
