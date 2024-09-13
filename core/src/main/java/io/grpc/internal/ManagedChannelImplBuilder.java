@@ -35,6 +35,7 @@ import io.grpc.ClientTransportFilter;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.Grpc.ChannelAttr;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalConfiguratorRegistry;
 import io.grpc.ManagedChannel;
@@ -196,6 +197,9 @@ public final class ManagedChannelImplBuilder
 
   @Nullable
   ProxyDetector proxyDetector;
+
+  @ChannelAttr
+  Attributes channelAttributes = Attributes.EMPTY;
 
   private boolean authorityCheckerDisabled;
   private boolean statsEnabled = true;
@@ -663,6 +667,10 @@ public final class ManagedChannelImplBuilder
     tracingEnabled = value;
   }
 
+  public void setChannelAttributes(@ChannelAttr Attributes channelAttributes) {
+    this.channelAttributes = channelAttributes;
+  }
+
   /**
    * Verifies the authority is valid.
    */
@@ -936,5 +944,12 @@ public final class ManagedChannelImplBuilder
    */
   public NameResolverRegistry getNameResolverRegistry() {
     return nameResolverRegistry;
+  }
+
+  /**
+   * Returns the target string.
+   */
+  public String getTarget() {
+    return target;
   }
 }

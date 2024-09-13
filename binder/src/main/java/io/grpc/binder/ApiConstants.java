@@ -17,7 +17,10 @@
 package io.grpc.binder;
 
 import android.content.Intent;
+import android.os.UserHandle;
+import io.grpc.Attributes;
 import io.grpc.ExperimentalApi;
+import io.grpc.Grpc.ChannelAttr;
 
 /** Constant parts of the gRPC binder transport public API. */
 @ExperimentalApi("https://github.com/grpc/grpc-java/issues/8022")
@@ -29,4 +32,8 @@ public final class ApiConstants {
    * themselves in a {@link android.app.Service#onBind(Intent)} call.
    */
   public static final String ACTION_BIND = "grpc.io.action.BIND";
+
+  @ChannelAttr
+  public static final Attributes.Key<UserHandle> CHANNEL_ATTR_TARGET_USER =
+      Attributes.Key.create("io.grpc.binder.CHANNEL_ATTR_TARGET_USER");
 }

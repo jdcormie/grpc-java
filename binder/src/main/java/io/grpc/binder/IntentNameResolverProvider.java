@@ -19,14 +19,18 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.MoreExecutors;
+import io.grpc.Attributes;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.NameResolver;
 import io.grpc.NameResolver.Args;
 import io.grpc.NameResolver.ResolutionResult;
 import io.grpc.NameResolverProvider;
+import io.grpc.NameResolverRegistry;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.SynchronizationContext;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -34,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -41,11 +46,14 @@ import javax.annotation.Nullable;
  * AndroidComponentAddress'es
  */
 final class IntentNameResolverProvider extends NameResolverProvider {
+  private static final Logger logger = Logger.getLogger(IntentNameResolverProvider.class.getName());
 
   /** The URI scheme created by {@link Intent#URI_INTENT_SCHEME}. */
   public static final String ANDROID_INTENT_SCHEME = "intent";
 
   private final Context context;
+
+  private static IntentNameResolverProvider INSTANCE;
 
   /**
    * Creates a new AndroidIntentNameResolverProvider.
@@ -56,8 +64,31 @@ final class IntentNameResolverProvider extends NameResolverProvider {
     this.context = context;
   }
 
+  /**
+   *
+   * <p>This is safe even in the rare case where a single process hosts multiple Applications
+   * because each one gets its own classloader and thus instance of this class.
+   *
+   * @param application
+   * @return
+   */
+  public static IntentNameResolverProvider createAndRegisterSingletonOnce(Context application) {
+    synchronized (IntentNameResolverProvider.class) {
+      if (INSTANCE == null) {
+        INSTANCE = new IntentNameResolverProvider(application);
+        NameResolverRegistry.getDefaultRegistry().register(INSTANCE);
+      }
+      return INSTANCE;
+    }
+  }
+
   @Override
   public String getDefaultScheme() {
+    return ANDROID_INTENT_SCHEME;
+  }
+
+  @Override
+  public String getScheme() {
     return ANDROID_INTENT_SCHEME;
   }
 
@@ -89,7 +120,7 @@ final class IntentNameResolverProvider extends NameResolverProvider {
   private ResolutionResult lookupAndroidComponentAddress(URI targetUri, Args args)
       throws StatusException {
     Intent targetIntent = parseUri(targetUri);
-    List<ResolveInfo> resolveInfoList = lookupServices(targetIntent);
+    List<ResolveInfo> resolveInfoList = lookupServices(targetIntent, args);
 
     // Model each matching android.app.Service as an individual gRPC server with a single address.
     List<EquivalentAddressGroup> servers = new ArrayList<>();
@@ -111,17 +142,38 @@ final class IntentNameResolverProvider extends NameResolverProvider {
           new EquivalentAddressGroup(AndroidComponentAddress.forBindIntent(copyTargetIntent)));
     }
 
+    Attributes.Builder attributes = Attributes.newBuilder();
+    UserHandle targetUser = args.getChannelAttributes().get(ApiConstants.CHANNEL_ATTR_TARGET_USER);
+    if (targetUser != null) {
+      attributes.set(ApiConstants.CHANNEL_ATTR_TARGET_USER, targetUser);
+    }
+
     return ResolutionResult.newBuilder()
         .setAddresses(ImmutableList.copyOf(servers))
         // pick_first is the default load balancing (LB) policy if the service config does not
         // specify one.
         .setServiceConfig(args.getServiceConfigParser().parseServiceConfig(ImmutableMap.of()))
+        .setAttributes(attributes.build())
         .build();
   }
 
-  private List<ResolveInfo> lookupServices(Intent intent) throws StatusException {
+  @SuppressWarnings("unchecked") // Reflection
+  private List<ResolveInfo> lookupServices(Intent intent, Args args) throws StatusException {
     PackageManager packageManager = context.getPackageManager();
-    List<ResolveInfo> intentServices = packageManager.queryIntentServices(intent, 0);
+    List<ResolveInfo> intentServices;
+    UserHandle targetUser = args.getChannelAttributes().get(ApiConstants.CHANNEL_ATTR_TARGET_USER);
+    if (targetUser != null) {
+      // queryIntentServicesAsUser() is a @SystemApi
+      try {
+        Method queryMethod = packageManager.getClass()
+            .getMethod("queryIntentServicesAsUser", Intent.class, int.class, UserHandle.class);
+        intentServices = (List<ResolveInfo>) queryMethod.invoke(packageManager, intent, 0, targetUser);
+      } catch (InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
+        throw Status.INTERNAL.withCause(e).asException();
+      }
+    } else {
+      intentServices = packageManager.queryIntentServices(intent, 0);
+    }
     if (intentServices.isEmpty()) {
       throw Status.UNIMPLEMENTED
           .withDescription("Service not found for intent " + intent)
@@ -231,6 +283,7 @@ final class IntentNameResolverProvider extends NameResolverProvider {
 
     @SuppressLint("UnprotectedReceiver") // All of these are protected system broadcasts.
     private void maybeRegisterReceiver() {
+      // TODO: Move this to the NRP layer so that every Channel doesn't repeat the same work.
       if (receiver == null) {
         receiver = new PackageChangeReceiver();
         IntentFilter filter = new IntentFilter();

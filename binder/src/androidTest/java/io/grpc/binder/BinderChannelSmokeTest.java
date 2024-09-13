@@ -245,6 +245,7 @@ public final class BinderChannelSmokeTest {
   public void testConnectViaIntentTargetUri() throws Exception {
     // TODO(jdcormie): Make this test good.
     channel = BinderChannelBuilder.forTarget("intent://foo/bar", appContext).build();
+    // channel = BinderChannelBuilder.forTarget("android-app://com.foo.bar/authoritaaay", appContext).build();
     ListenableFuture<String> resultFuture = doCall("Hello");
     try {
       resultFuture.get();
