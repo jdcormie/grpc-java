@@ -219,13 +219,15 @@ public abstract class NameResolver {
     @Override
     @Deprecated
     @InlineMe(
-        replacement = "this.onResult2(ResolutionResult.newBuilder().setAddressesOrError("
+        replacement = "this.onResult(ResolutionResult.newBuilder().setAddressesOrError("
             + "StatusOr.fromValue(servers)).setAttributes(attributes).build())",
         imports = {"io.grpc.NameResolver.ResolutionResult", "io.grpc.StatusOr"})
     public final void onAddresses(
         List<EquivalentAddressGroup> servers, @ResolutionResultAttr Attributes attributes) {
       // TODO(jihuncho) need to promote Listener2 if we want to use ConfigOrError
-      onResult2(
+      // Calling onResult and not onResult2 because onResult2 can only be called from a
+      // synchronization context.
+      onResult(
           ResolutionResult.newBuilder().setAddressesOrError(
               StatusOr.fromValue(servers)).setAttributes(attributes).build());
     }
@@ -288,6 +290,7 @@ public abstract class NameResolver {
     @Nullable private final ChannelLogger channelLogger;
     @Nullable private final Executor executor;
     @Nullable private final String overrideAuthority;
+    @Nullable private final MetricRecorder metricRecorder;
 
     private Args(
         Integer defaultPort,
@@ -297,7 +300,8 @@ public abstract class NameResolver {
         @Nullable ScheduledExecutorService scheduledExecutorService,
         @Nullable ChannelLogger channelLogger,
         @Nullable Executor executor,
-        @Nullable String overrideAuthority) {
+        @Nullable String overrideAuthority,
+        @Nullable MetricRecorder metricRecorder) {
       this.defaultPort = checkNotNull(defaultPort, "defaultPort not set");
       this.proxyDetector = checkNotNull(proxyDetector, "proxyDetector not set");
       this.syncContext = checkNotNull(syncContext, "syncContext not set");
@@ -306,6 +310,7 @@ public abstract class NameResolver {
       this.channelLogger = channelLogger;
       this.executor = executor;
       this.overrideAuthority = overrideAuthority;
+      this.metricRecorder = metricRecorder;
     }
 
     /**
@@ -403,6 +408,14 @@ public abstract class NameResolver {
       return overrideAuthority;
     }
 
+    /**
+     * Returns the {@link MetricRecorder} that the channel uses to record metrics.
+     */
+    @Nullable
+    public MetricRecorder getMetricRecorder() {
+      return metricRecorder;
+    }
+
 
     @Override
     public String toString() {
@@ -415,6 +428,7 @@ public abstract class NameResolver {
           .add("channelLogger", channelLogger)
           .add("executor", executor)
           .add("overrideAuthority", overrideAuthority)
+          .add("metricRecorder", metricRecorder)
           .toString();
     }
 
@@ -433,6 +447,7 @@ public abstract class NameResolver {
       builder.setChannelLogger(channelLogger);
       builder.setOffloadExecutor(executor);
       builder.setOverrideAuthority(overrideAuthority);
+      builder.setMetricRecorder(metricRecorder);
       return builder;
     }
 
@@ -459,6 +474,7 @@ public abstract class NameResolver {
       private ChannelLogger channelLogger;
       private Executor executor;
       private String overrideAuthority;
+      private MetricRecorder metricRecorder;
 
       Builder() {
       }
@@ -546,6 +562,14 @@ public abstract class NameResolver {
       }
 
       /**
+       * See {@link Args#getMetricRecorder()}. This is an optional field.
+       */
+      public Builder setMetricRecorder(MetricRecorder metricRecorder) {
+        this.metricRecorder = metricRecorder;
+        return this;
+      }
+
+      /**
        * Builds an {@link Args}.
        *
        * @since 1.21.0
@@ -554,7 +578,8 @@ public abstract class NameResolver {
         return
             new Args(
                 defaultPort, proxyDetector, syncContext, serviceConfigParser,
-                scheduledExecutorService, channelLogger, executor, overrideAuthority);
+                scheduledExecutorService, channelLogger, executor, overrideAuthority,
+                metricRecorder);
       }
     }
   }
