@@ -19,20 +19,24 @@ package io.grpc.binder;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
+import static org.robolectric.Shadows.shadowOf;
 
+import android.os.Looper;
 import android.os.Process;
+import androidx.core.content.ContextCompat;
+import androidx.test.core.app.ApplicationProvider;
 import com.google.common.base.Function;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.Uninterruptibles;
 import io.grpc.Status;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -49,6 +53,8 @@ public final class ServerSecurityPolicyTest {
   private static final int OTHER_UID = MY_UID + 1;
 
   ServerSecurityPolicy policy;
+  final Executor executor =
+      ContextCompat.getMainExecutor(ApplicationProvider.getApplicationContext());
 
   @Test
   public void testDefaultInternalOnly() throws Exception {
@@ -153,8 +159,7 @@ public final class ServerSecurityPolicyTest {
                       // Add some extra future transformation to confirm that a chain
                       // of futures gets properly handled.
                       ListenableFuture<Void> dependency = Futures.immediateVoidFuture();
-                      return Futures.transform(
-                          dependency, unused -> Status.OK, MoreExecutors.directExecutor());
+                      return Futures.transform(dependency, unused -> Status.OK, executor);
                     }))
             .build();
 
@@ -181,8 +186,8 @@ public final class ServerSecurityPolicyTest {
             .build();
 
     ListenableFuture<Status> statusFuture =
-        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1);
-
+        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1, executor);
+    shadowOf(Looper.getMainLooper()).idle();
     assertThrows(ExecutionException.class, statusFuture::get);
   }
 
@@ -194,8 +199,8 @@ public final class ServerSecurityPolicyTest {
             .build();
 
     ListenableFuture<Status> statusFuture =
-        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1);
-
+        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1, executor);
+    shadowOf(Looper.getMainLooper()).idle();
     assertThrows(CancellationException.class, statusFuture::get);
   }
 
@@ -231,8 +236,8 @@ public final class ServerSecurityPolicyTest {
                     }))
             .build();
     ListenableFuture<Status> statusFuture =
-        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1);
-
+        policy.checkAuthorizationForServiceAsync(MY_UID, SERVICE1, executor);
+    shadowOf(Looper.getMainLooper()).idle();
     assertThrows(InterruptedException.class, statusFuture::get);
     listeningExecutorService.shutdownNow();
   }
@@ -337,11 +342,12 @@ public final class ServerSecurityPolicyTest {
    * Shortcut for invoking {@link ServerSecurityPolicy#checkAuthorizationForServiceAsync} without
    * dealing with concurrency details. Returns a {link @Status.Code} for convenience.
    */
-  private static Status.Code checkAuthorizationForServiceAsync(
+  private Status.Code checkAuthorizationForServiceAsync(
       ServerSecurityPolicy policy, int callerUid, String service) throws ExecutionException {
     ListenableFuture<Status> statusFuture =
-        policy.checkAuthorizationForServiceAsync(callerUid, service);
-    return Uninterruptibles.getUninterruptibly(statusFuture).getCode();
+        policy.checkAuthorizationForServiceAsync(callerUid, service, executor);
+    shadowOf(Looper.getMainLooper()).idle();
+    return Futures.getDone(statusFuture).getCode();
   }
 
   private static SecurityPolicy policy(Function<Integer, Status> func) {

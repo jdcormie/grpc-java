@@ -22,6 +22,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Status;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executor;
 import javax.annotation.CheckReturnValue;
 
 /**
@@ -66,22 +67,18 @@ public final class ServerSecurityPolicy {
    *
    * @param uid The Android UID to authenticate.
    * @param serviceName The name of the gRPC service being called.
+   * @param offloadExecutor for evaluating the relevant SecurityPolicy if it's not natively async
    * @return a future with the result of the authorization check. A failed future represents a
    *     failure to perform the authorization check, not that the access is denied.
    */
   @CheckReturnValue
-  ListenableFuture<Status> checkAuthorizationForServiceAsync(int uid, String serviceName) {
+  ListenableFuture<Status> checkAuthorizationForServiceAsync(
+      int uid, String serviceName, Executor offloadExecutor) {
     SecurityPolicy securityPolicy = perServicePolicies.getOrDefault(serviceName, defaultPolicy);
     if (securityPolicy instanceof AsyncSecurityPolicy) {
       return ((AsyncSecurityPolicy) securityPolicy).checkAuthorizationAsync(uid);
     }
-
-    try {
-      Status status = securityPolicy.checkAuthorization(uid);
-      return Futures.immediateFuture(status);
-    } catch (Exception e) {
-      return Futures.immediateFailedFuture(e);
-    }
+    return Futures.submit(() -> securityPolicy.checkAuthorization(uid), offloadExecutor);
   }
 
   public static Builder newBuilder() {

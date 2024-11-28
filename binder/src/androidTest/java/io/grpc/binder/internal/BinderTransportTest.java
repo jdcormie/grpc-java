@@ -70,6 +70,7 @@ public final class BinderTransportTest extends AbstractTransportTest {
             .setListenAddress(addr)
             .setExecutorPool(serverExecutorPool)
             .setExecutorServicePool(executorServicePool)
+            .setOffloadExecutorPool(offloadExecutorPool)
             .setStreamTracerFactories(streamTracerFactories)
             .build();
 
