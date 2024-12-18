@@ -139,6 +139,10 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
       return this;
     }
 
+    public Context getSourceContext() {
+      return sourceContext;
+    }
+
     public Builder setOffloadExecutorPool(ObjectPool<? extends Executor> offloadExecutorPool) {
       this.offloadExecutorPool = checkNotNull(offloadExecutorPool, "offloadExecutorPool");
       return this;
@@ -163,6 +167,10 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
     public Builder setSecurityPolicy(SecurityPolicy securityPolicy) {
       this.securityPolicy = checkNotNull(securityPolicy, "securityPolicy");
       return this;
+    }
+
+    public SecurityPolicy getSecurityPolicy() {
+      return securityPolicy;
     }
 
     public Builder setDefaultTargetUserHandle(@Nullable UserHandle defaultTargetUserHandle) {
