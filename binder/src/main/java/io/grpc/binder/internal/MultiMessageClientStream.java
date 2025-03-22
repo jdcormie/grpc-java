@@ -75,6 +75,10 @@ final class MultiMessageClientStream implements ClientStream {
       synchronized (inbound) {
         inbound.closeAbnormal(se.getStatus());
       }
+    } catch (RuntimeException e) {
+      synchronized (inbound) {
+        inbound.closeAbnormal(Status.fromThrowable(e));
+      }
     }
   }
 
@@ -101,6 +105,10 @@ final class MultiMessageClientStream implements ClientStream {
       synchronized (inbound) {
         inbound.closeAbnormal(se.getStatus());
       }
+    } catch (RuntimeException e) {
+      synchronized (inbound) {
+        inbound.closeAbnormal(Status.fromThrowable(e));
+      }
     }
   }
 
@@ -113,6 +121,10 @@ final class MultiMessageClientStream implements ClientStream {
     } catch (StatusException se) {
       synchronized (inbound) {
         inbound.closeAbnormal(se.getStatus());
+      }
+    } catch (RuntimeException e) {
+      synchronized (inbound) {
+        inbound.closeAbnormal(Status.fromThrowable(e));
       }
     }
   }

@@ -108,7 +108,11 @@ final class SingleMessageClientStream implements ClientStream {
       synchronized (inbound) {
         inbound.closeAbnormal(se.getStatus());
       }
-    }
++    } catch (RuntimeException e) {
++      synchronized (inbound) {
++        inbound.closeAbnormal(Status.fromThrowable(e));
++      }
+     }
   }
 
   @Override

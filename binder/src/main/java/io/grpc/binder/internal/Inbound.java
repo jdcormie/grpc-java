@@ -284,6 +284,9 @@ abstract class Inbound<L extends StreamListener> implements StreamListener.Messa
   private final void closeAbnormal(
       Status outboundStatus, Status internalStatus, boolean isOobFromRemote) {
     if (!isClosed()) {
+      if (internalStatus.getCause() instanceof RuntimeException) {
+        transport.shutdownInternal(internalStatus, true);
+      }
       boolean wasInitialized = (deliveryState != State.UNINITIALIZED);
       onDeliveryState(State.CLOSED);
       if (wasInitialized) {

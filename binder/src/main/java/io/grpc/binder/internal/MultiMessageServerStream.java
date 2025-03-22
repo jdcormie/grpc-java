@@ -91,8 +91,12 @@ final class MultiMessageServerStream implements ServerStream {
       synchronized (inbound) {
         inbound.closeAbnormal(se.getStatus());
       }
-    }
-  }
++    } catch (RuntimeException e) {
++      synchronized (inbound) {
++        inbound.closeAbnormal(Status.fromThrowable(e));
++      }
+     }
+   }
 
   @Override
   public void writeMessage(InputStream message) {
@@ -105,8 +109,12 @@ final class MultiMessageServerStream implements ServerStream {
       synchronized (inbound) {
         inbound.closeAbnormal(se.getStatus());
       }
-    }
-  }
++    } catch (RuntimeException e) {
++      synchronized (inbound) {
++        inbound.closeAbnormal(Status.fromThrowable(e));
++      }
+     }
+   }
 
   @Override
   public void close(Status status, Metadata trailers) {
@@ -117,12 +125,16 @@ final class MultiMessageServerStream implements ServerStream {
       synchronized (inbound) {
         inbound.onCloseSent(status);
       }
-    } catch (StatusException se) {
-      synchronized (inbound) {
-        inbound.closeAbnormal(se.getStatus());
-      }
-    }
-  }
++    } catch (StatusException se) {
++      synchronized (inbound) {
++        inbound.closeAbnormal(se.getStatus());
++      }
++    } catch (RuntimeException e) {
++      synchronized (inbound) {
++        inbound.closeAbnormal(Status.fromThrowable(e));
++      }
+     }
++  }
 
   @Override
   public void cancel(Status status) {

@@ -109,12 +109,18 @@ final class SingleMessageServerStream implements ServerStream {
       synchronized (inbound) {
         inbound.onCloseSent(status);
       }
-    } catch (StatusException se) {
-      synchronized (inbound) {
-        inbound.closeAbnormal(se.getStatus());
-      }
-    }
++    } catch (StatusException se) {
++      synchronized (inbound) {
++        inbound.closeAbnormal(se.getStatus());
++      }
++    } catch (RuntimeException e) {
++      synchronized (inbound) {
++        inbound.closeAbnormal(Status.fromThrowable(e));
++      }
++    }
   }
+
+  @Override
 
   @Override
   public void cancel(Status status) {
