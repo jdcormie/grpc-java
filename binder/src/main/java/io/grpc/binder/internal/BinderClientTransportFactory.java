@@ -48,6 +48,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
   final BinderChannelCredentials channelCredentials;
   final Executor mainThreadExecutor;
   final ObjectPool<ScheduledExecutorService> scheduledExecutorPool;
+  final ObjectPool<? extends Executor> transportExecutorPool;
   final ObjectPool<? extends Executor> offloadExecutorPool;
   final SecurityPolicy securityPolicy;
   @Nullable final UserHandle defaultTargetUserHandle;
@@ -58,6 +59,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
 
   ScheduledExecutorService executorService;
   Executor offloadExecutor;
+  Executor transportExecutor;
   private boolean closed;
 
   private BinderClientTransportFactory(Builder builder) {
@@ -69,6 +71,8 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
             : ContextCompat.getMainExecutor(sourceContext);
     scheduledExecutorPool = checkNotNull(builder.scheduledExecutorPool);
     offloadExecutorPool = checkNotNull(builder.offloadExecutorPool);
+    transportExecutorPool = builder.transportExecutorPool != null ?
+        builder.transportExecutorPool : builder.offloadExecutorPool;
     securityPolicy = checkNotNull(builder.securityPolicy);
     defaultTargetUserHandle = builder.defaultTargetUserHandle;
     bindServiceFlags = checkNotNull(builder.bindServiceFlags);
@@ -78,6 +82,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
 
     executorService = scheduledExecutorPool.getObject();
     offloadExecutor = offloadExecutorPool.getObject();
+    transportExecutor = transportExecutorPool.getObject();
   }
 
   @Override
@@ -103,6 +108,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
   public void close() {
     closed = true;
     executorService = scheduledExecutorPool.returnObject(executorService);
+    transportExecutor = transportExecutorPool.returnObject(transportExecutor);
     offloadExecutor = offloadExecutorPool.returnObject(offloadExecutor);
   }
 
@@ -120,6 +126,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
     // Optional.
     BinderChannelCredentials channelCredentials = BinderChannelCredentials.forDefault();
     Executor mainThreadExecutor; // Default filled-in at build time once sourceContext is decided.
+    ObjectPool<? extends Executor> transportExecutorPool; // Default filled-in at build time.
     ObjectPool<ScheduledExecutorService> scheduledExecutorPool =
         SharedResourcePool.forResource(GrpcUtil.TIMER_SERVICE);
     SecurityPolicy securityPolicy = SecurityPolicies.internalOnly();
@@ -136,6 +143,11 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
 
     public Builder setSourceContext(Context sourceContext) {
       this.sourceContext = checkNotNull(sourceContext);
+      return this;
+    }
+
+    public Builder setTransportExecutorPool(ObjectPool<? extends Executor> transportExecutorPool) {
+      this.transportExecutorPool = checkNotNull(transportExecutorPool, "transportExecutorPool");
       return this;
     }
 

@@ -559,8 +559,10 @@ public abstract class BinderTransport
   public static final class BinderClientTransport extends BinderTransport
       implements ConnectionClientTransport, Bindable.Observer {
 
+    private final ObjectPool<? extends Executor> transportExecutorPool;
     private final ObjectPool<? extends Executor> offloadExecutorPool;
     private final Executor offloadExecutor;
+    private final Executor transportExecutor;
     private final SecurityPolicy securityPolicy;
     private final Bindable serviceBinding;
 
@@ -598,8 +600,10 @@ public abstract class BinderTransport
               factory.inboundParcelablePolicy),
           factory.binderDecorator,
           buildLogId(factory.sourceContext, targetAddress));
+      this.transportExecutorPool = factory.transportExecutorPool;
       this.offloadExecutorPool = factory.offloadExecutorPool;
       this.securityPolicy = factory.securityPolicy;
+      this.transportExecutor = transportExecutorPool.getObject();
       this.offloadExecutor = offloadExecutorPool.getObject();
       this.readyTimeoutMillis = factory.readyTimeoutMillis;
       numInUseStreams = new AtomicInteger();
@@ -621,13 +625,14 @@ public abstract class BinderTransport
     @Override
     void releaseExecutors() {
       super.releaseExecutors();
+      transportExecutorPool.returnObject(transportExecutor);
       offloadExecutorPool.returnObject(offloadExecutor);
     }
 
     @Override
     public synchronized void onBound(IBinder binder) {
       sendSetupTransaction(
-          binderDecorator.decorate(OneWayBinderProxy.wrap(binder, offloadExecutor)));
+          binderDecorator.decorate(OneWayBinderProxy.wrap(binder, transportExecutor)));
     }
 
     @Override
@@ -788,7 +793,7 @@ public abstract class BinderTransport
                   handleAuthResult(t);
                 }
               },
-              offloadExecutor);
+              transportExecutor);
         }
       }
     }
@@ -797,7 +802,7 @@ public abstract class BinderTransport
       if (inState(TransportState.SETUP)) {
         if (!authorization.isOk()) {
           shutdownInternal(authorization, true);
-        } else if (!setOutgoingBinder(OneWayBinderProxy.wrap(binder, offloadExecutor))) {
+        } else if (!setOutgoingBinder(OneWayBinderProxy.wrap(binder, transportExecutor))) {
           shutdownInternal(
               Status.UNAVAILABLE.withDescription("Failed to observe outgoing binder"), true);
         } else {

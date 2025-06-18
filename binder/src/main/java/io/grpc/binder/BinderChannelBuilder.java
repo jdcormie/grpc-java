@@ -211,6 +211,25 @@ public final class BinderChannelBuilder extends ForwardingChannelBuilder<BinderC
   }
 
   /**
+   * Provides a custom Executor for potentially expensive, but not blocking, transport work.
+   *
+   * <p>This is an optional parameter. If the user has not provided a scheduled executor service
+   * when the channel is built, the builder will use a static cached thread pool.
+   *
+   * <p>The channel does not take ownership of 'transportExecutor'. Callers must shut it down at
+   * some point *after* every Channel built with in has terminated.
+   *
+   * <p>'transportExecutor' must not be directExecutor() or similar.
+   *
+   * @return this
+   */
+  public BinderChannelBuilder transportExecutor(Executor transportExecutor) {
+    transportFactoryBuilder.setTransportExecutorPool(
+        new FixedObjectPool<>(checkNotNull(transportExecutor, "transportExecutor")));
+    return this;
+  }
+
+  /**
    * Provides a custom {@link Executor} for accessing this application's main thread.
    *
    * <p>Optional. A default implementation will be used if no custom Executor is provided.
