@@ -111,7 +111,9 @@ final class IntentNameResolver extends NameResolver {
   @Override
   public void refresh() {
     checkState(listener != null, "Not started!");
-    resolve();
+    // Ignore. Our BroadcastReceiver tells us exactly when PackageManager state changes and any
+    // actual errors performing the last query are likely to be permanent. There's no reason to
+    // believe another query will tell `listener` something we haven't already told it.
   }
 
   private void resolve() {

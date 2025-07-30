@@ -16,6 +16,7 @@
 package io.grpc.binder.internal;
 
 import static android.content.Intent.ACTION_PACKAGE_ADDED;
+import static android.content.Intent.ACTION_PACKAGE_CHANGED;
 import static android.content.Intent.ACTION_PACKAGE_REPLACED;
 import static android.content.Intent.URI_INTENT_SCHEME;
 import static android.os.Looper.getMainLooper;
@@ -293,14 +294,12 @@ public final class IntentNameResolverTest {
   }
 
   @Test
-  public void testRefresh_returnsSameAndroidComponentAddresses() throws Exception {
+  public void testRefresh_isIgnored() throws Exception {
     Intent intent = newIntent();
     IntentFilter serviceIntentFilter = newFilterMatching(intent);
 
     shadowPackageManager.addServiceIfNotPresent(SOME_COMPONENT_NAME);
     shadowPackageManager.addIntentFilterForService(SOME_COMPONENT_NAME, serviceIntentFilter);
-    shadowPackageManager.addServiceIfNotPresent(ANOTHER_COMPONENT_NAME);
-    shadowPackageManager.addIntentFilterForService(ANOTHER_COMPONENT_NAME, serviceIntentFilter);
 
     NameResolver nameResolver = newNameResolver(getIntentUri(intent));
     syncContext.execute(() -> nameResolver.start(mockListener));
@@ -309,18 +308,11 @@ public final class IntentNameResolverTest {
     verify(mockListener, never()).onError(any());
     verify(mockListener).onResult2(resultCaptor.capture());
     assertThat(getAddressesOrThrow(resultCaptor.getValue()))
-        .containsExactly(
-            toAddressList(intent.cloneFilter().setComponent(SOME_COMPONENT_NAME)),
-            toAddressList(intent.cloneFilter().setComponent(ANOTHER_COMPONENT_NAME)));
+        .containsExactly(toAddressList(intent.cloneFilter().setComponent(SOME_COMPONENT_NAME)));
 
     syncContext.execute(nameResolver::refresh);
     shadowOf(getMainLooper()).idle();
-    verify(mockListener, never()).onError(any());
-    verify(mockListener, times(2)).onResult2(resultCaptor.capture());
-    assertThat(getAddressesOrThrow(resultCaptor.getValue()))
-        .containsExactly(
-            toAddressList(intent.cloneFilter().setComponent(SOME_COMPONENT_NAME)),
-            toAddressList(intent.cloneFilter().setComponent(ANOTHER_COMPONENT_NAME)));
+    verifyNoMoreInteractions(mockListener);
 
     syncContext.execute(nameResolver::shutdown);
     shadowOf(getMainLooper()).idle();
@@ -332,18 +324,24 @@ public final class IntentNameResolverTest {
     Intent intent = newIntent();
     IntentFilter serviceIntentFilter = newFilterMatching(intent);
 
+    NameResolver nameResolver = newNameResolver(getIntentUri(intent));
+    syncContext.execute(() -> nameResolver.start(mockListener));
+    shadowOf(getMainLooper()).idle();
+    verify(mockListener).onResult2(resultCaptor.capture());
+
     shadowPackageManager.addServiceIfNotPresent(SOME_COMPONENT_NAME);
     shadowPackageManager.addIntentFilterForService(SOME_COMPONENT_NAME, serviceIntentFilter);
 
-    NameResolver nameResolver = newNameResolver(getIntentUri(intent));
-    syncContext.execute(() -> nameResolver.start(mockListener)); // Should kick off the 1st lookup.
-    syncContext.execute(nameResolver::refresh); // Should queue a lookup to run when 1st finishes.
-    syncContext.execute(nameResolver::refresh); // Should be ignored since a lookup is already Q'd.
-    syncContext.execute(nameResolver::refresh); // Also ignored.
+    // Should kick off a first lookup.
+    broadcastPackageChange(ACTION_PACKAGE_CHANGED, SOME_COMPONENT_NAME.getPackageName());
+    // Should queue a second lookup to run when the first finishes.
+    broadcastPackageChange(ACTION_PACKAGE_CHANGED, SOME_COMPONENT_NAME.getPackageName());
+    // Should be ignored since a lookup is already in-flight and a follow-up is already queued.
+    broadcastPackageChange(ACTION_PACKAGE_CHANGED, SOME_COMPONENT_NAME.getPackageName());
     shadowOf(getMainLooper()).idle();
 
-    verify(mockListener, never()).onError(any());
-    verify(mockListener, times(2)).onResult2(resultCaptor.capture());
+    // Expect times(3): +1 from start(), +2 from the series of broadcastPackageChange()s.
+    verify(mockListener, times(3)).onResult2(resultCaptor.capture());
     assertThat(getAddressesOrThrow(resultCaptor.getValue()))
         .containsExactly(toAddressList(intent.cloneFilter().setComponent(SOME_COMPONENT_NAME)));
 
