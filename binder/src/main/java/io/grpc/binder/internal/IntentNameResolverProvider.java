@@ -18,7 +18,9 @@ package io.grpc.binder.internal;
 import static android.content.Intent.URI_INTENT_SCHEME;
 
 import android.content.Intent;
+import android.net.Uri;
 import com.google.common.collect.ImmutableSet;
+import io.grpc.Grpc;
 import io.grpc.NameResolver;
 import io.grpc.NameResolver.Args;
 import io.grpc.NameResolverProvider;
@@ -69,7 +71,13 @@ public final class IntentNameResolverProvider extends NameResolverProvider {
 
   private static Intent parseUriArg(URI targetUri) {
     try {
-      return Intent.parseUri(targetUri.toString(), URI_INTENT_SCHEME);
+      String targetString = targetUri.toString();
+      targetString = targetString.replace(Grpc.EMPTY_SSP_SENTINEL, "");
+      // Uri data = result.getData();
+      // if (data != null && Grpc.EMPTY_SSP_SENTINEL.equals(data.getSchemeSpecificPart())) {
+      //   result.setData(data.buildUpon().opaquePart(null).build());
+      // }
+      return Intent.parseUri(targetString, URI_INTENT_SCHEME);
     } catch (URISyntaxException e) {
       throw new IllegalArgumentException(e);
     }

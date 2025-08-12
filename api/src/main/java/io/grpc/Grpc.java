@@ -65,6 +65,8 @@ public final class Grpc {
   @Documented
   public @interface TransportAttr {}
 
+  public static final String EMPTY_SSP_SENTINEL = "_GRPC_SSP_HACK_";
+
   /**
    * Creates a channel builder with a target string and credentials. The target can be either a
    * valid {@link NameResolver}-compliant URI, or an authority string.

@@ -35,6 +35,7 @@ import io.grpc.ClientTransportFilter;
 import io.grpc.CompressorRegistry;
 import io.grpc.DecompressorRegistry;
 import io.grpc.EquivalentAddressGroup;
+import io.grpc.Grpc;
 import io.grpc.InternalChannelz;
 import io.grpc.InternalConfiguratorRegistry;
 import io.grpc.ManagedChannel;
@@ -63,6 +64,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 
@@ -121,6 +123,9 @@ public final class ManagedChannelImplBuilder
   // From RFC 2396: scheme = alpha *( alpha | digit | "+" | "-" | "." )
   @VisibleForTesting
   static final Pattern URI_PATTERN = Pattern.compile("[a-zA-Z][a-zA-Z0-9+.-]*:/.*");
+
+  @VisibleForTesting
+  static final Pattern EMPTY_SSP_PATTERN = Pattern.compile("([a-zA-Z][a-zA-Z0-9+.-]*):#(.*)");
 
   private static final Method GET_CLIENT_INTERCEPTOR_METHOD;
 
@@ -835,8 +840,21 @@ public final class ManagedChannelImplBuilder
     try {
       targetUri = new URI(target);
     } catch (URISyntaxException e) {
-      // Can happen with ip addresses like "[::1]:1234" or 127.0.0.1:1234.
-      uriSyntaxErrors.append(e.getMessage());
+      Matcher matcher = EMPTY_SSP_PATTERN.matcher(target);
+      if (matcher.matches()) {
+        String scheme = matcher.group(1);
+        String fragment = matcher.group(2);
+        try {
+          URI hack = new URI(scheme + ":" + Grpc.EMPTY_SSP_SENTINEL + "#" + fragment);
+          targetUri = new URI(hack.getScheme(), hack.getSchemeSpecificPart(), hack.getFragment());
+        } catch (URISyntaxException e2) {
+          // Give up.
+          uriSyntaxErrors.append(e2.getMessage());
+        }
+      } else {
+        // Can happen with ip addresses like "[::1]:1234" or 127.0.0.1:1234.
+        uriSyntaxErrors.append(e.getMessage());
+      }
     }
     if (targetUri != null) {
       // For "localhost:8080" this would likely cause provider to be null, because "localhost" is

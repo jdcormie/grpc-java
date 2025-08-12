@@ -232,7 +232,7 @@ public final class BinderChannelSmokeTest {
     // Compare with the <intent-filter> mapping in AndroidManifest.xml.
     channel =
         BinderChannelBuilder.forTarget(
-                "intent://authority/path#Intent;action=action1;scheme=scheme;end;", appContext)
+                "intent:#Intent;action=action3;end;", appContext)
             .build();
     assertThat(doCall("Hello").get()).isEqualTo("Hello");
   }

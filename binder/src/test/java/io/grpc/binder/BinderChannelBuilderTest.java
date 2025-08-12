@@ -20,6 +20,7 @@ import static org.junit.Assert.fail;
 
 import android.content.Context;
 import androidx.test.core.app.ApplicationProvider;
+import io.grpc.ManagedChannel;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -40,5 +41,12 @@ public final class BinderChannelBuilderTest {
     } catch (IllegalStateException ise) {
       // Expected.
     }
+  }
+
+  @Test
+  public void pathlessUris() {
+    ManagedChannel channel = BinderChannelBuilder.forTarget("intent:#Intent;action=foo;end;", appContext)
+        .build();
+    channel.shutdownNow();
   }
 }
