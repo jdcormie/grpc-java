@@ -63,6 +63,19 @@ public class TestUtils {
     };
   }
 
+  public static ServerInterceptor recordRequestAuthority(final AtomicReference<String> authorityCapture) {
+    return new ServerInterceptor() {
+      @Override
+      public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+          ServerCall<ReqT, RespT> call,
+          Metadata requestHeaders,
+          ServerCallHandler<ReqT, RespT> next) {
+        authorityCapture.set(call.getAuthority());
+        return next.startCall(call, requestHeaders);
+      }
+    };
+  }
+
   /**
    * Returns the ciphers preferred to use during tests. They may be chosen because they are widely
    * available or because they are fast. There is no requirement that they provide confidentiality

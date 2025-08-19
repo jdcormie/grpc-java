@@ -18,6 +18,7 @@ package io.grpc.binder.internal;
 
 import static com.google.common.truth.Truth.assertThat;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -33,6 +34,8 @@ import androidx.test.core.content.pm.ApplicationInfoBuilder;
 import androidx.test.core.content.pm.PackageInfoBuilder;
 import com.google.common.collect.ImmutableList;
 import io.grpc.Attributes;
+import io.grpc.CallOptions;
+import io.grpc.Metadata;
 import io.grpc.ServerStreamTracer;
 import io.grpc.Status;
 import io.grpc.binder.AndroidComponentAddress;
@@ -40,15 +43,21 @@ import io.grpc.binder.ApiConstants;
 import io.grpc.binder.AsyncSecurityPolicy;
 import io.grpc.binder.internal.SettableAsyncSecurityPolicy.AuthRequest;
 import io.grpc.internal.AbstractTransportTest;
+import io.grpc.internal.ClientStream;
+import io.grpc.internal.ClientStreamListenerBase;
 import io.grpc.internal.ClientTransportFactory.ClientTransportOptions;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
+import io.grpc.internal.MockServerTransportListener;
+import io.grpc.internal.MockServerTransportListener.StreamCreation;
 import io.grpc.internal.ObjectPool;
+import io.grpc.internal.ServerStream;
 import io.grpc.internal.SharedResourcePool;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -262,6 +271,34 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
     authRequest.setResult(Status.OK);
 
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportReady();
+  }
+
+  @Test
+  @Override
+  public void authorityPropagation() throws Exception {
+    ClientTransportOptions options = new ClientTransportOptions();
+    options.setAuthority("some-authority");
+
+    server.start(serverListener);
+
+    client = newClientTransportBuilder()
+        .setServerAddress(server.getListenSocketAddress())
+        .setOptions(options)
+        .build();
+    startTransport(client, mockClientTransportListener);
+    MockServerTransportListener serverTransportListener
+        = serverListener.takeListenerOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+    Metadata clientHeaders = new Metadata();
+    ClientStream clientStream = client.newStream(
+        methodDescriptor, clientHeaders, CallOptions.DEFAULT, tracers);
+    ClientStreamListenerBase clientStreamListener = new ClientStreamListenerBase();
+    clientStream.start(clientStreamListener);
+    StreamCreation serverStreamCreation
+        = serverTransportListener.takeStreamOrFail(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    ServerStream serverStream = serverStreamCreation.stream;
+
+    assertThat(serverStream.getAuthority()).isEqualTo("some-authority");
   }
 
   @Test

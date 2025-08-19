@@ -19,7 +19,9 @@ package io.grpc.binder;
 import static org.junit.Assert.fail;
 
 import android.content.Context;
+import android.net.Uri;
 import androidx.test.core.app.ApplicationProvider;
+import java.net.URISyntaxException;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.junit.runner.RunWith;

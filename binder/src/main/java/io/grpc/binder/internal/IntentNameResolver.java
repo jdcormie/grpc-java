@@ -27,6 +27,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.UserHandle;
 import com.google.common.collect.ImmutableMap;
@@ -180,6 +181,24 @@ final class IntentNameResolver extends NameResolver {
 
   @Override
   public String getServiceAuthority() {
+    if (targetIntent.getPackage() != null) {
+      return targetIntent.getPackage();
+    }
+    if (targetIntent.getComponent() != null) {
+      return targetIntent.getComponent().getPackageName();
+    }
+    Uri data = targetIntent.getData();
+    if (data != null) {
+      if (data.getHost() != null) {
+        return data.getHost();
+      }
+      if (data.getSchemeSpecificPart() != null) {
+        return data.getEncodedSchemeSpecificPart();
+      }
+    }
+    if (targetIntent.getAction() != null) {
+      return targetIntent.getAction();
+    }
     return "localhost";
   }
 

@@ -164,6 +164,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
       if (version >= BinderTransport.EARLIEST_SUPPORTED_WIRE_FORMAT_VERSION) {
         IBinder callbackBinder = parcel.readStrongBinder();
         if (callbackBinder != null) {
+          int extFlags = parcel.readInt();
           int callingUid = Binder.getCallingUid();
           Attributes.Builder attrsBuilder =
               Attributes.newBuilder()
@@ -172,6 +173,9 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
                   .set(BinderTransport.REMOTE_UID, callingUid)
                   .set(BinderTransport.SERVER_AUTHORITY, listenAddress.getAuthority())
                   .set(BinderTransport.INBOUND_PARCELABLE_POLICY, inboundParcelablePolicy);
+          if ((extFlags & BinderTransport.EXT_FLAG_AUTHORITY) != 0) {
+            attrsBuilder.set(BinderTransport.SERVER_AUTHORITY, parcel.readString());
+          }
           BinderTransportSecurity.attachAuthAttrs(
               attrsBuilder,
               callingUid,

@@ -37,6 +37,7 @@ import io.grpc.Channel;
 import io.grpc.ClientInterceptors;
 import io.grpc.ConnectivityState;
 import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
+import io.grpc.HandlerRegistry;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
@@ -100,6 +101,7 @@ public final class BinderChannelSmokeTest {
   ManagedChannel channel;
   AtomicReference<Metadata> headersCapture = new AtomicReference<>();
   AtomicReference<PeerUid> clientUidCapture = new AtomicReference<>();
+  AtomicReference<String> authorityCapture = new AtomicReference<>();
   PoisonParcelable parcelableForResponseHeaders;
 
   @Before
@@ -132,6 +134,7 @@ public final class BinderChannelSmokeTest {
                 .build(),
             new AddParcelableServerInterceptor(),
             TestUtils.recordRequestHeadersInterceptor(headersCapture),
+            TestUtils.recordRequestAuthority(authorityCapture),
             PeerUids.newPeerIdentifyingServerInterceptor());
 
     AndroidComponentAddress serverAddress = HostServices.allocateService(appContext);
@@ -203,6 +206,20 @@ public final class BinderChannelSmokeTest {
   }
 
   @Test
+  public void testPerCallAuthorityIsIgnored() throws Exception {
+    channel =
+        BinderChannelBuilder.forTarget(
+                "intent://authority/path#Intent;action=action1;scheme=scheme;end;", appContext)
+            .build();
+    ListenableFuture<String> future =
+        ClientCalls.futureUnaryCall(channel.newCall(method,
+            CallOptions.DEFAULT.withAuthority("overridden-authority")
+        ), "Hello");
+    assertThat(withTestTimeout(future).get()).isEqualTo("Hello");
+    assertThat(authorityCapture.get()).isEqualTo("authority");
+  }
+
+  @Test
   public void testSingleLargeResultCall() throws Exception {
     String res = doCall(singleLargeResultMethod, "hello").get();
     assertThat(res.length()).isEqualTo(SLIGHTLY_MORE_THAN_ONE_BLOCK);
@@ -235,6 +252,7 @@ public final class BinderChannelSmokeTest {
                 "intent://authority/path#Intent;action=action1;scheme=scheme;end;", appContext)
             .build();
     assertThat(doCall("Hello").get()).isEqualTo("Hello");
+    assertThat(authorityCapture.get()).isEqualTo("authority");
   }
 
   @Test

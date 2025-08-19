@@ -105,9 +105,16 @@ public final class BinderTransportTest extends AbstractTransportTest {
     ClientTransportOptions options = new ClientTransportOptions();
     options.setEagAttributes(eagAttrs());
     options.setChannelLogger(transportLogger());
+    options.setAuthority(testAuthority(server));
 
     return new BinderTransport.BinderClientTransport(
         builder.buildClientTransportFactory(), addr, options);
+  }
+
+  @Test
+  @Override
+  public void authorityPropagation() throws Exception {
+    super.authorityPropagation();
   }
 
   @Test

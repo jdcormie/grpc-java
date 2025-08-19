@@ -109,6 +109,9 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public abstract class BinderTransport implements IBinder.DeathRecipient {
 
+  public static final int EXT_FLAG_STREAM_FLOW_CONTROL = 0x01;
+  public static final int EXT_FLAG_AUTHORITY = 0x02;
+
   private static final Logger logger = Logger.getLogger(BinderTransport.class.getName());
 
   /**
@@ -346,6 +349,8 @@ public abstract class BinderTransport implements IBinder.DeathRecipient {
     try (ParcelHolder parcel = ParcelHolder.obtain()) {
       parcel.get().writeInt(WIRE_FORMAT_VERSION);
       parcel.get().writeStrongBinder(incomingBinder);
+      parcel.get().writeInt(EXT_FLAG_AUTHORITY);
+      parcel.get().writeString(attributes.get(SERVER_AUTHORITY));
       iBinder.transact(SETUP_TRANSPORT, parcel);
     } catch (RemoteException re) {
       shutdownInternal(statusFromRemoteException(re), true);
@@ -605,7 +610,7 @@ public abstract class BinderTransport implements IBinder.DeathRecipient {
       super(
           factory.scheduledExecutorPool,
           buildClientAttributes(
-              options.getEagAttributes(),
+              options,
               factory.sourceContext,
               targetAddress,
               factory.inboundParcelablePolicy),
@@ -913,13 +918,14 @@ public abstract class BinderTransport implements IBinder.DeathRecipient {
     }
 
     private static Attributes buildClientAttributes(
-        Attributes eagAttrs,
+        ClientTransportOptions options,
         Context sourceContext,
         AndroidComponentAddress targetAddress,
         InboundParcelablePolicy inboundParcelablePolicy) {
       return Attributes.newBuilder()
           .set(GrpcAttributes.ATTR_SECURITY_LEVEL, SecurityLevel.NONE) // Trust noone for now.
-          .set(GrpcAttributes.ATTR_CLIENT_EAG_ATTRS, eagAttrs)
+          .set(GrpcAttributes.ATTR_CLIENT_EAG_ATTRS, options.getEagAttributes())
+          .set(SERVER_AUTHORITY, options.getAuthority())
           .set(Grpc.TRANSPORT_ATTR_LOCAL_ADDR, AndroidComponentAddress.forContext(sourceContext))
           .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, targetAddress)
           .set(INBOUND_PARCELABLE_POLICY, inboundParcelablePolicy)
