@@ -110,9 +110,9 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
   public boolean preAuthServersParam;
 
   @Parameter(value = 1)
-  public boolean useLegacyHandshake;
+  public boolean useLegacyAuthStrategy;
 
-  @Parameters(name = "preAuthServersParam={0};useLegacyHandshake={1}")
+  @Parameters(name = "preAuthServersParam={0};useLegacyAuthStrategy={1}")
   public static ImmutableList<Object[]> data() {
     return ImmutableList.of(
         new Object[] {false, false},
@@ -184,7 +184,7 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
   BinderClientTransportFactory.Builder newClientTransportFactoryBuilder() {
     return new BinderClientTransportFactory.Builder()
         .setPreAuthorizeServers(preAuthServersParam)
-        .setUseLegacyHandshake(useLegacyHandshake)
+        .setUseLegacyAuthStrategy(useLegacyAuthStrategy)
         .setSourceContext(application)
         .setScheduledExecutorPool(executorServicePool)
         .setOffloadExecutorPool(offloadExecutorPool);
@@ -245,7 +245,7 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
     }
 
     AuthRequest authRequest = securityPolicy.takeNextAuthRequest(TIMEOUT_MS, MILLISECONDS);
-    if (useLegacyHandshake) {
+    if (useLegacyAuthStrategy) {
       assertThat(authRequest.uid).isEqualTo(11111);
     } else {
       assertThat(authRequest.uid).isEqualTo(22222);

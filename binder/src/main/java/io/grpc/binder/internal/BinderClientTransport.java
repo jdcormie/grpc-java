@@ -73,7 +73,7 @@ public final class BinderClientTransport extends BinderTransport
   private final Executor offloadExecutor;
   private final SecurityPolicy securityPolicy;
   private final Bindable serviceBinding;
-  private final ClientHandshake handshake;
+  private final AuthStrategy authStrategy;
 
   /** Number of ongoing calls which keep this transport "in-use". */
   private final AtomicInteger numInUseStreams;
@@ -127,8 +127,8 @@ public final class BinderClientTransport extends BinderTransport
         preAuthServerOverride != null ? preAuthServerOverride : factory.preAuthorizeServers;
     numInUseStreams = new AtomicInteger();
     pingTracker = new PingTracker(Ticker.systemTicker(), (id) -> sendPing(id));
-    this.handshake =
-        factory.useLegacyHandshake ? new LegacyClientHandshake() : new NewClientHandshake();
+    this.authStrategy =
+        factory.useLegacyAuthStrategy ? new LegacyAuthStrategy() : new NewAuthStrategy();
     serviceBinding =
         new ServiceBinding(
             factory.mainThreadExecutor,
@@ -152,7 +152,7 @@ public final class BinderClientTransport extends BinderTransport
   public synchronized void onBound(IBinder binder) {
     OneWayBinderProxy binderProxy = OneWayBinderProxy.wrap(binder, offloadExecutor);
     binderProxy = binderDecorator.decorate(binderProxy);
-    handshake.onBound(binderProxy);
+    authStrategy.onBound(binderProxy);
   }
 
   @Override
@@ -345,7 +345,7 @@ public final class BinderClientTransport extends BinderTransport
             Status.UNAVAILABLE.withDescription("Malformed SETUP_TRANSPORT data"), true);
       } else {
         OneWayBinderProxy binderProxy = OneWayBinderProxy.wrap(binder, offloadExecutor);
-        handshake.handleSetupTransport(binderProxy);
+        authStrategy.handleSetupTransport(binderProxy);
       }
     }
   }
@@ -356,7 +356,7 @@ public final class BinderClientTransport extends BinderTransport
         : Futures.submit(() -> securityPolicy.checkAuthorization(remoteUid), offloadExecutor);
   }
 
-  class LegacyClientHandshake extends ClientHandshake {
+  class LegacyAuthStrategy extends AuthStrategy {
     @Override
     @MainThread
     @GuardedBy("BinderClientTransport.this")
@@ -401,14 +401,14 @@ public final class BinderClientTransport extends BinderTransport
           // Check state again, since a failure inside setOutgoingBinder (or a callback it
           // triggers), could have shut us down.
           if (!isShutdown()) {
-            onHandshakeComplete();
+            onSetupComplete();
           }
         }
       }
     }
   }
 
-  class NewClientHandshake extends ClientHandshake {
+  class NewAuthStrategy extends AuthStrategy {
     @Override
     @GuardedBy("BinderClientTransport.this")
     public void onBound(OneWayBinderProxy endpointBinder) {
@@ -475,13 +475,13 @@ public final class BinderClientTransport extends BinderTransport
         shutdownInternal(
             Status.UNAVAILABLE.withDescription("Failed to observe outgoing binder"), true);
       } else {
-        onHandshakeComplete();
+        onSetupComplete();
       }
     }
   }
 
   @GuardedBy("this")
-  private void onHandshakeComplete() {
+  private void onSetupComplete() {
     setState(TransportState.READY);
     attributes = clientTransportListener.filterTransport(attributes);
     clientTransportListener.transportReady();
@@ -503,9 +503,11 @@ public final class BinderClientTransport extends BinderTransport
   }
 
   /**
-   * An abstraction of the client handshake, used to transition off a problematic legacy approach.
+   * An abstract method of authorizing a server against our SecurityPolicy.
+   *
+   * <p>Supports a clean migration away from the legacy approach, one client at a time.
    */
-  abstract class ClientHandshake {
+  static abstract class AuthStrategy {
     /**
      * Notifies the implementation that the binding has succeeded and we are now connected to the
      * server 'endpointBinder'.
@@ -515,8 +517,8 @@ public final class BinderClientTransport extends BinderTransport
     abstract void onBound(OneWayBinderProxy endpointBinder);
 
     /**
-     * Notifies the implementation that we've received a valid SETUP_TRANSPORT transaction from a
-     * server that can be reached at 'serverBinder'.
+     * Notifies the implementation that we've received a valid SETUP_TRANSPORT message from a server
+     * that can be reached at 'serverBinder'.
      */
     @GuardedBy("BinderClientTransport.this")
     @BinderThread
