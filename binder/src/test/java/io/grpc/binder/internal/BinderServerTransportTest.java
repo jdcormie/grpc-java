@@ -20,12 +20,15 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.robolectric.Shadows.shadowOf;
 
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Parcel;
+import android.os.RemoteException;
+
 import com.google.common.collect.ImmutableList;
 import io.grpc.Attributes;
 import io.grpc.Status;
@@ -65,8 +68,7 @@ public final class BinderServerTransportTest {
             new FixedObjectPool<>(executorService),
             Attributes.EMPTY,
             ImmutableList.of(),
-            OneWayBinderProxy.IDENTITY_DECORATOR,
-            mockBinder);
+            OneWayBinderProxy.IDENTITY_DECORATOR);
     transportListener = new MockServerTransportListener(transport);
   }
 
@@ -74,10 +76,32 @@ public final class BinderServerTransportTest {
   public void testSetupTransactionFailureCausesMultipleShutdowns_b153460678() throws Exception {
     // Make the binder fail the setup transaction.
     when(mockBinder.transact(anyInt(), any(Parcel.class), isNull(), anyInt())).thenReturn(false);
-    transport.setServerTransportListener(transportListener);
+    transport.start(mockBinder, transportListener);
 
     // Now shut it down.
     transport.shutdownNow(Status.UNKNOWN.withDescription("reasons"));
+    shadowOf(Looper.getMainLooper()).idle();
+
+    assertThat(transportListener.isTerminated()).isTrue();
+  }
+
+  @Test
+  public void testClientBinderDeadOnArrival() throws Exception {
+    RemoteException re = new RemoteException("No lieutenant, your men are already dead.");
+    when(mockBinder.transact(anyInt(), any(Parcel.class), isNull(), anyInt())).thenThrow(re);
+    doThrow(re).when(mockBinder).linkToDeath(any(), anyInt());
+
+    transport.start(mockBinder, transportListener);
+    shadowOf(Looper.getMainLooper()).idle();
+
+    assertThat(transportListener.isTerminated()).isTrue();
+  }
+
+  @Test
+  public void testShutdownBeforeStart() throws Exception {
+    transport.shutdownNow(Status.CANCELLED.withDescription("Handshake timeout exceeded"));
+    shadowOf(Looper.getMainLooper()).idle();
+    transport.start(mockBinder, transportListener);
     shadowOf(Looper.getMainLooper()).idle();
 
     assertThat(transportListener.isTerminated()).isTrue();

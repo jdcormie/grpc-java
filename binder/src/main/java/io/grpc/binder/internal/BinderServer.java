@@ -183,9 +183,8 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
                   executorServicePool,
                   attrsBuilder.build(),
                   streamTracerFactories,
-                  OneWayBinderProxy.IDENTITY_DECORATOR,
-                  callbackBinder);
-          transport.setServerTransportListener(listener.transportCreated(transport));
+                  OneWayBinderProxy.IDENTITY_DECORATOR);
+          transport.start(callbackBinder, listener.transportCreated(transport));
           return true;
         }
       }

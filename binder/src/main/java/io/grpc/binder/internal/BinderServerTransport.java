@@ -49,29 +49,33 @@ public final class BinderServerTransport extends BinderTransport implements Serv
       ObjectPool<ScheduledExecutorService> executorServicePool,
       Attributes attributes,
       List<ServerStreamTracer.Factory> streamTracerFactories,
-      OneWayBinderProxy.Decorator binderDecorator,
-      IBinder callbackBinder) {
+      OneWayBinderProxy.Decorator binderDecorator) {
     super(executorServicePool, attributes, binderDecorator, buildLogId(attributes));
     this.streamTracerFactories = streamTracerFactories;
-    // TODO(jdcormie): Plumb in the Server's executor() and use it here instead.
-    setOutgoingBinder(OneWayBinderProxy.wrap(callbackBinder, getScheduledExecutorService()));
   }
 
-  public synchronized void setServerTransportListener(
-      ServerTransportListener serverTransportListener) {
+  /**
+   * Initializes a newly constructed instance.
+   *
+   * <p>Must be called before any other method.
+   *
+   * @param callbackBinder how to reach the connected client
+   * @param serverTransportListener where this instance should report events
+   */
+  public synchronized void start(
+      IBinder callbackBinder, ServerTransportListener serverTransportListener) {
     this.serverTransportListener = serverTransportListener;
-    if (isShutdown()) {
-      setState(TransportState.SHUTDOWN_TERMINATED);
-      notifyTerminated();
-      releaseExecutors();
-    } else {
-      sendSetupTransaction();
-      // Check we're not shutdown again, since a failure inside sendSetupTransaction (or a callback
-      // it triggers), could have shut us down.
-      if (!isShutdown()) {
-        setState(TransportState.READY);
-        attributes = serverTransportListener.transportReady(attributes);
-      }
+
+    // Ignore failure here. An already-dead client will be handled below in sendSetupTransaction().
+    // TODO(jdcormie): Plumb in the Server's executor() and use it here instead.
+    setOutgoingBinder(OneWayBinderProxy.wrap(callbackBinder, getScheduledExecutorService()));
+
+    sendSetupTransaction();
+
+    // Check we're not shutdown, since a failure inside sendSetupTransaction() could have done so.
+    if (!isShutdown()) {
+      setState(TransportState.READY);
+      attributes = serverTransportListener.transportReady(attributes);
     }
   }
 
