@@ -87,14 +87,6 @@ public final class BinderClientTransport extends BinderTransport
   @GuardedBy("this")
   private ScheduledFuture<?> readyTimeoutFuture; // != null iff timeout scheduled.
 
-  @GuardedBy("this")
-  @Nullable
-  private ListenableFuture<Status> authResultFuture; // null before we check auth.
-
-  @GuardedBy("this")
-  @Nullable
-  private ListenableFuture<Status> preAuthResultFuture; // null before we pre-auth.
-
   /**
    * Constructs a new transport instance.
    *
@@ -179,6 +171,7 @@ public final class BinderClientTransport extends BinderTransport
                         BinderClientTransport.this::onReadyTimeout,
                         readyTimeoutMillis,
                         MILLISECONDS);
+            register(readyTimeoutFuture);
           }
         }
       }
@@ -195,7 +188,8 @@ public final class BinderClientTransport extends BinderTransport
     // unauthorized server a chance to run, but the connection will still fail by SecurityPolicy
     // check later in handshake. Pre-auth remains effective at mitigating abuse because malware
     // can't typically control the exact timing of its installation.
-    preAuthResultFuture = checkServerAuthorizationAsync(serviceInfo.applicationInfo.uid);
+    ListenableFuture<Status> preAuthResultFuture =
+        register(checkServerAuthorizationAsync(serviceInfo.applicationInfo.uid));
     Futures.addCallback(
         preAuthResultFuture,
         new FutureCallback<Status>() {
@@ -312,16 +306,6 @@ public final class BinderClientTransport extends BinderTransport
     if (numInUseStreams.getAndSet(0) > 0) {
       clientTransportListener.transportInUse(false);
     }
-    if (readyTimeoutFuture != null) {
-      readyTimeoutFuture.cancel(false);
-      readyTimeoutFuture = null;
-    }
-    if (preAuthResultFuture != null) {
-      preAuthResultFuture.cancel(false); // No effect if already complete.
-    }
-    if (authResultFuture != null) {
-      authResultFuture.cancel(false); // No effect if already complete.
-    }
     serviceBinding.unbind();
     clientTransportListener.transportTerminated();
   }
@@ -340,7 +324,8 @@ public final class BinderClientTransport extends BinderTransport
             Status.UNAVAILABLE.withDescription("Malformed SETUP_TRANSPORT data"), true);
       } else {
         attributes = setSecurityAttrs(attributes, remoteUid);
-        authResultFuture = checkServerAuthorizationAsync(remoteUid);
+        ListenableFuture<Status> authResultFuture =
+            register(checkServerAuthorizationAsync(remoteUid));
         Futures.addCallback(
             authResultFuture,
             new FutureCallback<Status>() {
