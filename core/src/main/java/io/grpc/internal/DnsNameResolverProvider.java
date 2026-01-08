@@ -31,15 +31,18 @@ import java.util.Collections;
  * A provider for {@link DnsNameResolver}.
  *
  * <p>It resolves a target URI whose scheme is {@code "dns"}. The (optional) authority of the target
- * URI is reserved for the address of alternative DNS server (not implemented yet). The path of the
- * target URI, excluding the leading slash {@code '/'}, is treated as the host name and the optional
- * port to be resolved by DNS. Example target URIs:
+ * URI is reserved for the address of alternative DNS server (not implemented yet). The first path
+ * segment of the hierarchical target URI is interpreted as the RFC 2396 server-based authority of
+ * the resulting {@link NameResolver} (see {@link NameResolver#getServiceAuthority()}). The "host"
+ * part of this authority becomes the name to be resolved by DNS. The optional "port" part of this
+ * authority is used as the port number of all {@link InetSocketAddress} produced by this resolver
+ * (see also {@link NameResolver.Args#getDefaultPort()}). Example target URIs:
  *
  * <ul>
- *   <li>{@code "dns:///foo.googleapis.com:8080"} (using default DNS)</li>
+ *   <li>{@code "dns:///foo.googleapis.com:8080"} (using default DNS)
  *   <li>{@code "dns://8.8.8.8/foo.googleapis.com:8080"} (using alternative DNS (not implemented
- *   yet))</li>
- *   <li>{@code "dns:///foo.googleapis.com"} (without port)</li>
+ *       yet))
+ *   <li>{@code "dns:///foo.googleapis.com"} (without port)
  * </ul>
  */
 public final class DnsNameResolverProvider extends NameResolverProvider {
