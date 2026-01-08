@@ -20,12 +20,15 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import io.grpc.InternalServiceProviders;
 import io.grpc.NameResolver;
+import io.grpc.NameResolver.Args;
 import io.grpc.NameResolverProvider;
+import io.grpc.Uri;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 /**
  * A provider for {@link DnsNameResolver}.
@@ -54,6 +57,7 @@ public final class DnsNameResolverProvider extends NameResolverProvider {
 
   @Override
   public NameResolver newNameResolver(URI targetUri, NameResolver.Args args) {
+    // TODO(jdcormie): Remove once RFC 3986 migration is complete.
     if (SCHEME.equals(targetUri.getScheme())) {
       String targetPath = Preconditions.checkNotNull(targetUri.getPath(), "targetPath");
       Preconditions.checkArgument(targetPath.startsWith("/"),
@@ -62,6 +66,25 @@ public final class DnsNameResolverProvider extends NameResolverProvider {
       return new DnsNameResolver(
           targetUri.getAuthority(),
           name,
+          args,
+          GrpcUtil.SHARED_CHANNEL_EXECUTOR,
+          Stopwatch.createUnstarted(),
+          IS_ANDROID);
+    } else {
+      return null;
+    }
+  }
+
+  @Override
+  public NameResolver newNameResolver(Uri targetUri, final Args args) {
+    if (SCHEME.equals(targetUri.getScheme())) {
+      List<String> pathSegments = targetUri.getPathSegments();
+      Preconditions.checkArgument(!pathSegments.isEmpty(),
+          "expected 1 path segment in target %s but found %s", targetUri, pathSegments);
+      String domainNameToResolve = pathSegments.get(0);
+      return new DnsNameResolver(
+          targetUri.getAuthority(),
+          domainNameToResolve,
           args,
           GrpcUtil.SHARED_CHANNEL_EXECUTOR,
           Stopwatch.createUnstarted(),
