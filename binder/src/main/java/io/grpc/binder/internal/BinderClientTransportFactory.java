@@ -33,6 +33,7 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ManagedChannelImplBuilder.ClientTransportFactoryBuilder;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.SharedResourcePool;
+import io.grpc.binder.internal.LeakSafeOneWayBinder.TransactionHandler;
 import java.net.SocketAddress;
 import java.util.Collection;
 import java.util.Collections;
@@ -51,6 +52,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
   final BindServiceFlags bindServiceFlags;
   final InboundParcelablePolicy inboundParcelablePolicy;
   final OneWayBinderProxy.Decorator binderDecorator;
+  final TransactionHandler.Decorator txnHandlerDecorator;
   final long readyTimeoutMillis;
   final boolean preAuthorizeServers; // TODO(jdcormie): Default to true.
   final boolean useLegacyAuthStrategy;
@@ -72,6 +74,7 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
     bindServiceFlags = checkNotNull(builder.bindServiceFlags);
     inboundParcelablePolicy = checkNotNull(builder.inboundParcelablePolicy);
     binderDecorator = checkNotNull(builder.binderDecorator);
+    txnHandlerDecorator = checkNotNull(builder.txnHandlerDecorator);
     readyTimeoutMillis = builder.readyTimeoutMillis;
     preAuthorizeServers = builder.preAuthorizeServers;
     useLegacyAuthStrategy = builder.useLegacyAuthStrategy;
@@ -126,6 +129,8 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
     BindServiceFlags bindServiceFlags = BindServiceFlags.DEFAULTS;
     InboundParcelablePolicy inboundParcelablePolicy = InboundParcelablePolicy.DEFAULT;
     OneWayBinderProxy.Decorator binderDecorator = OneWayBinderProxy.IDENTITY_DECORATOR;
+    TransactionHandler.Decorator txnHandlerDecorator =
+        TransactionHandler.IDENTITY_DECORATOR;
     long readyTimeoutMillis = 60_000;
     boolean preAuthorizeServers;
     boolean useLegacyAuthStrategy = true; // TODO(jdcormie): Default to false.
@@ -188,6 +193,20 @@ public final class BinderClientTransportFactory implements ClientTransportFactor
      */
     public Builder setBinderDecorator(OneWayBinderProxy.Decorator binderDecorator) {
       this.binderDecorator = checkNotNull(binderDecorator, "binderDecorator");
+      return this;
+    }
+
+    /**
+     * Sets the {@link TransactionHandler.Decorator} to be applied to the client's incoming binder.
+     *
+     * <p>Tests can use this to intercept incoming transactions from server to client. The specified
+     * decorator will be applied to the transport binder (handling subsequent call transactions).
+     *
+     * <p>Optional, {@link TransactionHandler#IDENTITY_DECORATOR} is the default.
+     */
+    public Builder setTxnHandlerDecorator(
+        TransactionHandler.Decorator txnHandlerDecorator) {
+      this.txnHandlerDecorator = checkNotNull(txnHandlerDecorator, "txnHandlerDecorator");
       return this;
     }
 

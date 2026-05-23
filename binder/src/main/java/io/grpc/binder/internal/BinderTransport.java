@@ -201,13 +201,15 @@ public abstract class BinderTransport implements IBinder.DeathRecipient {
       ObjectPool<ScheduledExecutorService> executorServicePool,
       Attributes attributes,
       OneWayBinderProxy.Decorator binderDecorator,
+      TransactionHandler.Decorator txnHandlerDecorator,
       InternalLogId logId) {
     this.binderDecorator = binderDecorator;
     this.executorServicePool = executorServicePool;
     this.attributes = attributes;
     this.logId = logId;
     scheduledExecutorService = executorServicePool.getObject();
-    incomingBinder = new LeakSafeOneWayBinder(this::handleTransaction);
+    incomingBinder =
+        new LeakSafeOneWayBinder(txnHandlerDecorator.decorate(this::handleTransaction));
     ongoingCalls = new ConcurrentHashMap<>();
     flowController = new FlowController(TRANSACTION_BYTES_WINDOW);
   }

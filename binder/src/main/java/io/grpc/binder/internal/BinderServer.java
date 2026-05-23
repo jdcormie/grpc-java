@@ -38,6 +38,7 @@ import io.grpc.binder.SecurityPolicies;
 import io.grpc.binder.ServerSecurityPolicy;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.InternalServer;
+import io.grpc.binder.internal.LeakSafeOneWayBinder.TransactionHandler;
 import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerListener;
 import io.grpc.internal.SharedResourcePool;
@@ -71,6 +72,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   private final BinderTransportSecurity.ServerPolicyChecker serverPolicyChecker;
   private final InboundParcelablePolicy inboundParcelablePolicy;
   private final OneWayBinderProxy.Decorator clientBinderDecorator;
+  private final TransactionHandler.Decorator txnHandlerDecorator;
 
   @GuardedBy("this")
   private ServerListener listener;
@@ -89,12 +91,12 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     this.listenAddress = checkNotNull(builder.listenAddress);
     this.executorPool = checkNotNull(builder.executorPool);
     this.executorServicePool = builder.executorServicePool;
-    this.streamTracerFactories =
-        ImmutableList.copyOf(checkNotNull(builder.streamTracerFactories, "streamTracerFactories"));
+    this.streamTracerFactories = ImmutableList.copyOf(builder.streamTracerFactories);
     this.serverPolicyChecker = BinderInternal.createPolicyChecker(builder.serverSecurityPolicy);
     this.inboundParcelablePolicy = builder.inboundParcelablePolicy;
     this.clientBinderDecorator = builder.clientBinderDecorator;
-    hostServiceBinder = new LeakSafeOneWayBinder(this);
+    this.txnHandlerDecorator = builder.txnHandlerDecorator;
+    hostServiceBinder = new LeakSafeOneWayBinder(txnHandlerDecorator.decorate(this));
   }
 
   /** Return the binder we're listening on. */
@@ -186,6 +188,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
                   .setAttributes(attrsBuilder.build())
                   .setStreamTracerFactories(streamTracerFactories)
                   .setBinderDecorator(clientBinderDecorator)
+                  .setTxnHandlerDecorator(txnHandlerDecorator)
                   .setCallbackBinder(callbackBinder)
                   .build();
           transport.start(listener.transportCreated(transport));
@@ -221,7 +224,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
   /** Fluent builder of {@link BinderServer} instances. */
   public static class Builder {
     @Nullable AndroidComponentAddress listenAddress;
-    @Nullable List<? extends ServerStreamTracer.Factory> streamTracerFactories;
+    List<? extends ServerStreamTracer.Factory> streamTracerFactories = ImmutableList.of();
     @Nullable ObjectPool<? extends Executor> executorPool;
 
     ObjectPool<ScheduledExecutorService> executorServicePool =
@@ -229,6 +232,7 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
     ServerSecurityPolicy serverSecurityPolicy = SecurityPolicies.serverInternalOnly();
     InboundParcelablePolicy inboundParcelablePolicy = InboundParcelablePolicy.DEFAULT;
     OneWayBinderProxy.Decorator clientBinderDecorator = OneWayBinderProxy.IDENTITY_DECORATOR;
+    TransactionHandler.Decorator txnHandlerDecorator = TransactionHandler.IDENTITY_DECORATOR;
 
     public BinderServer build() {
       return new BinderServer(this);
@@ -311,6 +315,20 @@ public final class BinderServer implements InternalServer, LeakSafeOneWayBinder.
      */
     public Builder setClientBinderDecorator(OneWayBinderProxy.Decorator clientBinderDecorator) {
       this.clientBinderDecorator = checkNotNull(clientBinderDecorator);
+      return this;
+    }
+
+    /**
+     * Sets the {@link TransactionHandler.Decorator} to be applied to this server's incoming binders.
+     *
+     * <p>Tests can use this to intercept incoming transactions from client to server. The specified
+     * decorator will be applied to the host binder (handling connection setup) and to the transport
+     * binders created for each connected client (handling subsequent call transactions).
+     *
+     * <p>Optional, {@link TransactionHandler#IDENTITY_DECORATOR} is the default.
+     */
+    public Builder setTxnHandlerDecorator(TransactionHandler.Decorator txnHandlerDecorator) {
+      this.txnHandlerDecorator = checkNotNull(txnHandlerDecorator);
       return this;
     }
   }

@@ -31,6 +31,7 @@ import io.grpc.internal.ObjectPool;
 import io.grpc.internal.ServerStream;
 import io.grpc.internal.ServerTransport;
 import io.grpc.internal.ServerTransportListener;
+import io.grpc.binder.internal.LeakSafeOneWayBinder.TransactionHandler;
 import io.grpc.internal.StatsTraceContext;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
@@ -49,8 +50,14 @@ public final class BinderServerTransport extends BinderTransport implements Serv
       ObjectPool<ScheduledExecutorService> executorServicePool,
       Attributes attributes,
       List<ServerStreamTracer.Factory> streamTracerFactories,
-      OneWayBinderProxy.Decorator binderDecorator) {
-    super(executorServicePool, attributes, binderDecorator, buildLogId(attributes));
+      OneWayBinderProxy.Decorator binderDecorator,
+      TransactionHandler.Decorator txnHandlerDecorator) {
+    super(
+        executorServicePool,
+        attributes,
+        binderDecorator,
+        txnHandlerDecorator,
+        buildLogId(attributes));
     this.streamTracerFactories = streamTracerFactories;
   }
 
@@ -65,7 +72,8 @@ public final class BinderServerTransport extends BinderTransport implements Serv
             checkNotNull(builder.executorServicePool, "executorServicePool"),
             builder.attributes,
             builder.streamTracerFactories,
-            builder.binderDecorator);
+            builder.binderDecorator,
+            builder.txnHandlerDecorator);
     // TODO(jdcormie): Plumb in the Server's executor() and use it here instead.
     // No need to handle failure here because if 'callbackBinder' is already dead, we'll notice it
     // again in start() when we send the first transaction.
@@ -168,6 +176,8 @@ public final class BinderServerTransport extends BinderTransport implements Serv
     private Attributes attributes = Attributes.EMPTY;
     private List<ServerStreamTracer.Factory> streamTracerFactories = ImmutableList.of();
     private OneWayBinderProxy.Decorator binderDecorator = OneWayBinderProxy.IDENTITY_DECORATOR;
+    private TransactionHandler.Decorator txnHandlerDecorator =
+        TransactionHandler.IDENTITY_DECORATOR;
     private IBinder callbackBinder;
 
     private Builder() {}
@@ -189,6 +199,11 @@ public final class BinderServerTransport extends BinderTransport implements Serv
 
     public Builder setBinderDecorator(OneWayBinderProxy.Decorator binderDecorator) {
       this.binderDecorator = checkNotNull(binderDecorator, "binderDecorator");
+      return this;
+    }
+
+    public Builder setTxnHandlerDecorator(TransactionHandler.Decorator txnHandlerDecorator) {
+      this.txnHandlerDecorator = checkNotNull(txnHandlerDecorator, "txnHandlerDecorator");
       return this;
     }
 

@@ -61,6 +61,17 @@ public final class LeakSafeOneWayBinder extends Binder {
      */
     @BinderThread
     boolean handleTransaction(int code, Parcel data);
+
+    /** A {@link Decorator} that does nothing. */
+    Decorator IDENTITY_DECORATOR = (x) -> x;
+
+    /**
+     * Decorates a {@link TransactionHandler} to add behavior.
+     */
+    @Internal
+    interface Decorator {
+      TransactionHandler decorate(TransactionHandler input);
+    }
   }
 
   @Nullable private TransactionHandler handler;
