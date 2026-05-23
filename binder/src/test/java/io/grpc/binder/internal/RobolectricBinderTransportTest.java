@@ -26,6 +26,8 @@ import static io.grpc.binder.internal.BinderTransport.REMOTE_UID;
 import static io.grpc.binder.internal.BinderTransport.SETUP_TRANSPORT;
 import static io.grpc.binder.internal.BinderTransport.SHUTDOWN_TRANSPORT;
 import static io.grpc.binder.internal.BinderTransport.WIRE_FORMAT_VERSION;
+import static io.grpc.binder.internal.RobolectricUidPropagation.newUidPassingBinderDecorator;
+import static io.grpc.binder.internal.RobolectricUidPropagation.newUidRestoringBinderDecorator;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -68,6 +70,7 @@ import io.grpc.internal.ClientTransportFactory.ClientTransportOptions;
 import io.grpc.internal.ConnectionClientTransport;
 import io.grpc.internal.DisconnectError;
 import io.grpc.internal.GrpcUtil;
+import io.grpc.binder.internal.LeakSafeOneWayBinder.TransactionHandler;
 import io.grpc.internal.InternalServer;
 import io.grpc.internal.ManagedClientTransport;
 import io.grpc.internal.MockServerTransportListener;
@@ -113,6 +116,7 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
 
   static final int SERVER_APP_UID = 11111;
   static final int EPHEMERAL_SERVER_UID = 22222; // UID of isolated server process.
+  static final int CLIENT_UID = 33333;
 
   private final Application application = ApplicationProvider.getApplicationContext();
   private final ObjectPool<ScheduledExecutorService> executorServicePool =
@@ -188,8 +192,7 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
     return new BinderServer.Builder()
         .setListenAddress(listenAddr)
         .setExecutorPool(serverExecutorPool)
-        .setExecutorServicePool(executorServicePool)
-        .setStreamTracerFactories(List.of());
+        .setExecutorServicePool(executorServicePool);
   }
 
   void registerServerWithRobolectric(BinderServer server) {
@@ -252,16 +255,15 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
 
   @Test
   public void clientAuthorizesServerUidsInOrder() throws Exception {
-    // TODO(jdcormie): In real Android, Binder#getCallingUid is thread-local but Robolectric only
-    //  lets us fake value this *globally*. So the ShadowBinder#setCallingUid() here unrealistically
-    //  affects the server's view of the client's uid too. For now this doesn't matter because this
-    //  test never exercises server SecurityPolicy.
-    ShadowBinder.setCallingUid(EPHEMERAL_SERVER_UID);
-
     serverPkgInfo.applicationInfo.uid = SERVER_APP_UID;
     shadowOf(application.getPackageManager()).installPackage(serverPkgInfo);
     shadowOf(application.getPackageManager()).addOrUpdateService(serviceInfo);
-    server = newServer(ImmutableList.of());
+    server =
+        newServerBuilder()
+            .setClientBinderDecorator(newUidPassingBinderDecorator(EPHEMERAL_SERVER_UID))
+            .setTxnHandlerDecorator(newUidRestoringBinderDecorator())
+            .build();
+    registerServerWithRobolectric((BinderServer) server);
     server.start(serverListener);
 
     SettableAsyncSecurityPolicy securityPolicy = new SettableAsyncSecurityPolicy();
@@ -270,6 +272,8 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
             .setFactory(
                 newClientTransportFactoryBuilder()
                     .setSecurityPolicy(securityPolicy)
+                    .setBinderDecorator(newUidPassingBinderDecorator(CLIENT_UID))
+                    .setTxnHandlerDecorator(newUidRestoringBinderDecorator())
                     .buildClientTransportFactory())
             .build();
     runIfNotNull(client.start(mockClientTransportListener));
@@ -291,6 +295,16 @@ public final class RobolectricBinderTransportTest extends AbstractTransportTest 
     authRequest.setResult(Status.OK);
 
     verify(mockClientTransportListener, timeout(TIMEOUT_MS)).transportReady();
+
+    MockServerTransportListener serverTransportListener =
+        serverListener.takeListenerOrFail(TIMEOUT_MS, MILLISECONDS);
+    BinderServerTransport serverTransport = (BinderServerTransport) serverTransportListener.transport;
+    int clientUidOnServer = serverTransport.getAttributes().get(BinderTransport.REMOTE_UID);
+    assertThat(clientUidOnServer).isEqualTo(CLIENT_UID);
+
+    ClientTransport.PingCallback mockPingCallback = mock(ClientTransport.PingCallback.class);
+    client.ping(mockPingCallback, directExecutor());
+    verify(mockPingCallback, timeout(TIMEOUT_MS)).onSuccess(anyLong());
   }
 
   @Test
