@@ -73,11 +73,6 @@ public final class LeakSafeOneWayBinder extends Binder {
     setHandler(null);
   }
 
-  /** Returns the current {@link TransactionHandler} or null if already detached. */
-  public @Nullable TransactionHandler getHandler() {
-    return handler;
-  }
-
   /**
    * Replaces the current {@link TransactionHandler} with `handler`.
    *

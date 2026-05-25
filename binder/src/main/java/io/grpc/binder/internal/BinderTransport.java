@@ -19,8 +19,8 @@ package io.grpc.binder.internal;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
-import static io.grpc.binder.internal.TransactionUtils.newCallerFilteringHandler;
 
+import android.os.Binder;
 import android.os.DeadObjectException;
 import android.os.IBinder;
 import android.os.Parcel;
@@ -193,6 +193,9 @@ public abstract class BinderTransport implements IBinder.DeathRecipient {
   /** The number of incoming bytes we've told our peer we've received. */
   // Only read/written on @BinderThread.
   private long acknowledgedIncomingBytes;
+
+  // Only read/written on @BinderThread.
+  private int allowedCallingUid = -1;
 
   protected BinderTransport(
       ObjectPool<ScheduledExecutorService> executorServicePool,
@@ -438,6 +441,18 @@ public abstract class BinderTransport implements IBinder.DeathRecipient {
   @BinderThread
   @VisibleForTesting
   final boolean handleTransaction(int code, Parcel parcel) {
+    if (allowedCallingUid != -1) {
+      int callingUid = Binder.getCallingUid();
+      if (callingUid != allowedCallingUid) {
+        logger.log(
+            Level.WARNING,
+            "Rejecting incoming transaction. Calling UID "
+                + callingUid
+                + " does not match expected UID "
+                + allowedCallingUid);
+        return false;
+      }
+    }
     try {
       return handleTransactionInternal(code, parcel);
     } catch (RuntimeException e) {
@@ -511,10 +526,7 @@ public abstract class BinderTransport implements IBinder.DeathRecipient {
   @BinderThread
   @GuardedBy("this")
   protected void restrictIncomingBinderToCallsFrom(int allowedCallingUid) {
-    TransactionHandler currentHandler = incomingBinder.getHandler();
-    if (currentHandler != null) {
-      incomingBinder.setHandler(newCallerFilteringHandler(allowedCallingUid, currentHandler));
-    }
+    this.allowedCallingUid = allowedCallingUid;
   }
 
   @Nullable

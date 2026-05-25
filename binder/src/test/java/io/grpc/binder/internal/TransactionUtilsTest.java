@@ -17,54 +17,20 @@
 package io.grpc.binder.internal;
 
 import static com.google.common.truth.Truth.assertThat;
-import static io.grpc.binder.internal.TransactionUtils.newCallerFilteringHandler;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.same;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static io.grpc.binder.internal.TransactionUtils.hasFlag;
 
-import android.os.Binder;
-import android.os.Parcel;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.shadows.ShadowBinder;
 
 @RunWith(RobolectricTestRunner.class)
 public final class TransactionUtilsTest {
 
-  @Rule public MockitoRule mocks = MockitoJUnit.rule();
-
-  @Mock LeakSafeOneWayBinder.TransactionHandler mockHandler;
-
   @Test
-  public void shouldIgnoreTransactionFromWrongUid() {
-    Parcel p = Parcel.obtain();
-    int originalUid = Binder.getCallingUid();
-    try {
-      when(mockHandler.handleTransaction(eq(1234), same(p))).thenReturn(true);
-      LeakSafeOneWayBinder.TransactionHandler uid100OnlyHandler =
-          newCallerFilteringHandler(1000, mockHandler);
-
-      ShadowBinder.setCallingUid(9999);
-      boolean result = uid100OnlyHandler.handleTransaction(1234, p);
-      assertThat(result).isFalse();
-      verify(mockHandler, never()).handleTransaction(anyInt(), any());
-
-      ShadowBinder.setCallingUid(1000);
-      result = uid100OnlyHandler.handleTransaction(1234, p);
-      assertThat(result).isTrue();
-      verify(mockHandler).handleTransaction(1234, p);
-    } finally {
-      ShadowBinder.setCallingUid(originalUid);
-      p.recycle();
-    }
+  public void testHasFlag() {
+    int flags = 0x1 | 0x4;
+    assertThat(hasFlag(flags, 0x1)).isTrue();
+    assertThat(hasFlag(flags, 0x2)).isFalse();
+    assertThat(hasFlag(flags, 0x4)).isTrue();
   }
 }
