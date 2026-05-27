@@ -268,4 +268,58 @@ public final class IntentNameResolverIntegrationTest {
     assertThat(response.getResponseMessage()).isEqualTo(PERMITTED_PACKAGE);
   }
 
+  @Test
+  public void highestPriorityServerThrowsSecurityExceptionInBind_failsOverToLowerPriorityServer()
+      throws Exception {
+    String firstPriorityPackage = "com.example.first";
+    String secondPriorityPackage = "com.example.second";
+    int firstPriorityUid = 44444;
+    int secondPriorityUid = 55555;
+
+    ComponentName secondPriorityComponent = installService(secondPriorityPackage, secondPriorityUid, TEST_PERMISSION);
+    ComponentName firstPriorityComponent = installService(firstPriorityPackage, firstPriorityUid, TEST_PERMISSION);
+
+    Intent targetIntent = new Intent("io.grpc.action.BIND").setData(Uri.parse("grpc:///unused"));
+
+    Server secondPriorityServer = startServer(
+        secondPriorityComponent,
+        targetIntent,
+        secondPriorityUid,
+        new SimpleServiceImpl(secondPriorityPackage));
+
+    Server firstPriorityServer = startServer(
+        firstPriorityComponent,
+        targetIntent,
+        firstPriorityUid,
+        new SimpleServiceImpl(firstPriorityPackage));
+
+    // First priority has higher priority (1), Second priority has lower (0).
+    IntentFilter secondPriorityFilter = new IntentFilter(targetIntent.getAction());
+    secondPriorityFilter.addDataScheme(targetIntent.getData().getScheme());
+    secondPriorityFilter.setPriority(0);
+
+    IntentFilter firstPriorityFilter = new IntentFilter(targetIntent.getAction());
+    firstPriorityFilter.addDataScheme(targetIntent.getData().getScheme());
+    firstPriorityFilter.setPriority(1);
+
+    shadowPackageManager.addIntentFilterForService(secondPriorityComponent, secondPriorityFilter);
+    shadowPackageManager.addIntentFilterForService(firstPriorityComponent, firstPriorityFilter);
+
+    // Create a context wrapper that throws SecurityException when binding to first priority server
+    Context contextWrapper = new ContextWrapper(appContext) {
+      @Override
+      public boolean bindService(Intent service, ServiceConnection conn, int flags) {
+        if (firstPriorityComponent.equals(service.getComponent())) {
+          throw new SecurityException("Simulated permission denied for first priority");
+        }
+        return super.bindService(service, conn, flags);
+      }
+    };
+
+    channel = newChannelBuilder(targetIntent, contextWrapper, TEST_PERMISSION).build();
+    SimpleServiceGrpc.SimpleServiceBlockingStub stub = SimpleServiceGrpc.newBlockingStub(channel);
+
+    SimpleResponse response = stub.unaryRpc(SimpleRequest.getDefaultInstance());
+    assertThat(response.getResponseMessage()).isEqualTo(secondPriorityPackage);
+  }
 }
