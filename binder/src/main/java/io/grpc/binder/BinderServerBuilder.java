@@ -28,6 +28,8 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.binder.internal.BinderServer;
 import io.grpc.binder.internal.BinderTransportSecurity;
+import io.grpc.binder.internal.OneWayBinderProxy;
+import io.grpc.binder.internal.LeakSafeOneWayBinder.TransactionHandler;
 import io.grpc.internal.FixedObjectPool;
 import io.grpc.internal.ServerImplBuilder;
 import java.io.File;
@@ -139,6 +141,16 @@ public final class BinderServerBuilder extends ForwardingServerBuilder<BinderSer
   @Override
   public BinderServerBuilder useTransportSecurity(File certChain, File privateKey) {
     throw new UnsupportedOperationException("TLS not supported in BinderServer");
+  }
+
+  BinderServerBuilder clientBinderDecorator(OneWayBinderProxy.Decorator clientBinderDecorator) {
+    internalBuilder.setClientBinderDecorator(clientBinderDecorator);
+    return this;
+  }
+
+  BinderServerBuilder txnHandlerDecorator(TransactionHandler.Decorator txnHandlerDecorator) {
+    internalBuilder.setTxnHandlerDecorator(txnHandlerDecorator);
+    return this;
   }
 
   /**

@@ -26,6 +26,8 @@ import io.grpc.ForwardingChannelBuilder;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.binder.internal.BinderClientTransportFactory;
+import io.grpc.binder.internal.OneWayBinderProxy;
+import io.grpc.binder.internal.LeakSafeOneWayBinder.TransactionHandler;
 import io.grpc.internal.FixedObjectPool;
 import io.grpc.internal.ManagedChannelImplBuilder;
 import java.util.concurrent.Executor;
@@ -347,6 +349,16 @@ public final class BinderChannelBuilder extends ForwardingChannelBuilder<BinderC
         !strictLifecycleManagement,
         "Idle timeouts are not supported when strict lifecycle management is enabled");
     super.idleTimeout(value, unit);
+    return this;
+  }
+
+  BinderChannelBuilder binderDecorator(OneWayBinderProxy.Decorator binderDecorator) {
+    transportFactoryBuilder.setBinderDecorator(binderDecorator);
+    return this;
+  }
+
+  BinderChannelBuilder txnHandlerDecorator(TransactionHandler.Decorator txnHandlerDecorator) {
+    transportFactoryBuilder.setTxnHandlerDecorator(txnHandlerDecorator);
     return this;
   }
 
