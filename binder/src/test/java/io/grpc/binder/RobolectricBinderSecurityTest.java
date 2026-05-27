@@ -19,6 +19,7 @@ package io.grpc.binder;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static org.junit.Assert.assertThrows;
 import static org.robolectric.Shadows.shadowOf;
 
 import android.app.Application;
@@ -69,6 +70,7 @@ public final class RobolectricBinderSecurityTest {
       new ArrayBlockingQueue<>(128);
   private ManagedChannel channel;
   private Server server;
+  private AndroidComponentAddress listenAddress;
 
   @Parameter public boolean preAuthServersParam;
 
@@ -95,7 +97,7 @@ public final class RobolectricBinderSecurityTest {
     serviceInfo.applicationInfo = serverAppInfo;
     shadowOf(context.getPackageManager()).addOrUpdateService(serviceInfo);
 
-    AndroidComponentAddress listenAddress =
+    listenAddress =
         AndroidComponentAddress.forRemoteComponent(serviceInfo.packageName, serviceInfo.name);
 
     MethodDescriptor<Empty, Empty> methodDesc = getMethodDescriptor();
@@ -185,6 +187,36 @@ public final class RobolectricBinderSecurityTest {
         StatusRuntimeException.class,
         StatusRuntimeException::getStatus,
         directExecutor());
+  }
+ 
+  @Test
+  public void testClientSecurityPolicy_failsWithCause_causeIsChained() throws Exception {
+    channel.shutdownNow();
+
+    Throwable originalCause = new IllegalArgumentException("Client auth failed");
+    SecurityPolicy clientPolicy = new SecurityPolicy() {
+      @Override
+      public Status checkAuthorization(int uid) {
+        return Status.PERMISSION_DENIED
+            .withDescription("Rejected by client policy")
+            .withCause(originalCause);
+      }
+    };
+
+    channel =
+        BinderChannelBuilder.forAddress(listenAddress, context)
+            .preAuthorizeServers(preAuthServersParam)
+            .securityPolicy(clientPolicy)
+            .build();
+
+    ClientCall<Empty, Empty> call = channel.newCall(getMethodDescriptor(), CallOptions.DEFAULT);
+    StatusRuntimeException statusException =
+        assertThrows(
+            StatusRuntimeException.class,
+            () -> ClientCalls.blockingUnaryCall(call, Empty.getDefaultInstance()));
+    assertThat(statusException.getStatus().getCode()).isEqualTo(Status.Code.PERMISSION_DENIED);
+    assertThat(statusException.getCause()).isInstanceOf(UntrustedServerException.class);
+    assertThat(statusException.getCause().getCause()).isSameInstanceAs(originalCause);
   }
 
   private static MethodDescriptor<Empty, Empty> getMethodDescriptor() {

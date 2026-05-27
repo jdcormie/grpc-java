@@ -43,6 +43,7 @@ import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
 import io.grpc.SecurityLevel;
 import io.grpc.Status;
+import io.grpc.binder.UntrustedServerException;
 import io.grpc.StatusException;
 import io.grpc.binder.AndroidComponentAddress;
 import io.grpc.binder.AsyncSecurityPolicy;
@@ -219,7 +220,11 @@ public final class BinderClientTransport extends BinderTransport
     }
 
     if (!authorization.isOk()) {
-      shutdownInternal(authorization, true);
+      Throwable originalCause = authorization.getCause();
+      UntrustedServerException exception = (originalCause != null)
+          ? new UntrustedServerException(authorization.getDescription(), originalCause)
+          : new UntrustedServerException(authorization.getDescription());
+      shutdownInternal(authorization.withCause(exception), true);
       return;
     }
 
@@ -382,7 +387,11 @@ public final class BinderClientTransport extends BinderTransport
     }
 
     if (!authorization.isOk()) {
-      shutdownInternal(authorization, true);
+      Throwable originalCause = authorization.getCause();
+      UntrustedServerException exception = (originalCause != null)
+          ? new UntrustedServerException(authorization.getDescription(), originalCause)
+          : new UntrustedServerException(authorization.getDescription());
+      shutdownInternal(authorization.withCause(exception), true);
       return;
     }
     handshake.onServerAuthorizationOk();
