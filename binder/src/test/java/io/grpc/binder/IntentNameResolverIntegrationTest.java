@@ -37,6 +37,7 @@ import android.content.pm.ServiceInfo;
 import android.net.Uri;
 import androidx.test.core.app.ApplicationProvider;
 import com.google.common.collect.ImmutableSet;
+import io.grpc.LoadBalancerRegistry;
 import io.grpc.ManagedChannel;
 import io.grpc.NameResolverRegistry;
 import io.grpc.Server;
@@ -92,6 +93,8 @@ public final class IntentNameResolverIntegrationTest {
     // Register the provider.
     NameResolverRegistry.getDefaultRegistry()
         .register(new IntentNameResolverProvider());
+    LoadBalancerRegistry.getDefaultRegistry()
+        .register(new BinderPickFirstLoadBalancerProvider());
   }
 
   @After
@@ -269,7 +272,7 @@ public final class IntentNameResolverIntegrationTest {
   }
 
   @Test
-  public void highestPriorityServerThrowsSecurityExceptionInBind_failsOverToLowerPriorityServer()
+  public void highestPriorityServerThrowsSecurityExceptionInBind_noFailoverToLowerPriorityServer()
       throws Exception {
     String firstPriorityPackage = "com.example.first";
     String secondPriorityPackage = "com.example.second";
@@ -319,7 +322,16 @@ public final class IntentNameResolverIntegrationTest {
     channel = newChannelBuilder(targetIntent, contextWrapper, TEST_PERMISSION).build();
     SimpleServiceGrpc.SimpleServiceBlockingStub stub = SimpleServiceGrpc.newBlockingStub(channel);
 
-    SimpleResponse response = stub.unaryRpc(SimpleRequest.getDefaultInstance());
-    assertThat(response.getResponseMessage()).isEqualTo(secondPriorityPackage);
+    // RPC should fail because first priority throws SecurityException and we don't failover
+    StatusRuntimeException exception =
+        assertThrows(
+            StatusRuntimeException.class,
+            () -> stub.unaryRpc(SimpleRequest.getDefaultInstance()));
+
+    assertThat(exception.getStatus().getCode()).isEqualTo(Status.PERMISSION_DENIED.getCode());
+    assertThat(exception.getStatus().getDescription()).contains("SecurityException from bindService");
+    assertThat(exception.getCause().getClass()).isEqualTo(SecurityException.class);
+    assertThat(exception.getCause()).isNotInstanceOf(UntrustedServerException.class);
+    assertThat(exception.getCause().getMessage()).contains("Simulated permission denied for first priority");
   }
 }

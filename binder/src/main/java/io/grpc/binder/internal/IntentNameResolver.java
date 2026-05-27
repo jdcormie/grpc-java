@@ -29,6 +29,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.os.UserHandle;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -218,8 +219,13 @@ final class IntentNameResolver extends NameResolver {
 
     return ResolutionResult.newBuilder()
         .setAddressesOrError(StatusOr.fromValue(addresses))
-        // Empty service config means we get the default 'pick_first' load balancing policy.
-        .setServiceConfig(serviceConfigParser.parseServiceConfig(ImmutableMap.of()))
+        // Use binder_pick_first load balancing policy.
+        .setServiceConfig(
+            serviceConfigParser.parseServiceConfig(
+                ImmutableMap.of(
+                    "loadBalancingConfig",
+                    ImmutableList.of(
+                        ImmutableMap.of("binder_pick_first", ImmutableMap.of())))))
         .build();
   }
 
