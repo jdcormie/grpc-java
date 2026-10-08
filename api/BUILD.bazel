@@ -22,7 +22,7 @@ java_library(
     srcs = glob([
         "src/testFixtures/java/io/grpc/**/*.java",
     ]),
-    visibility = ["//xds:__pkg__"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "//core",
         artifact("com.google.code.findbugs:jsr305"),
