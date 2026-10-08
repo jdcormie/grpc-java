@@ -1,3 +1,8 @@
 build --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
 
+# Run Java tests on a fixed JDK, not whatever is installed locally, so results
+# don't vary by machine. Mockito 4.4.0's Byte Buddy officially supports only up
+# to Java 18.
+common --java_runtime_version=remotejdk_17
+
 common:skip_android --deleted_packages=android,binder
