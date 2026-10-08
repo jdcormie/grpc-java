@@ -23,3 +23,23 @@ java_library(
         artifact("junit:junit"),
     ],
 )
+
+# Test helpers in io.grpc.internal.testing, for grpc-java's own tests. Kept out
+# of the public :testing target so that it doesn't depend on opencensus.
+java_library(
+    name = "internal",
+    testonly = 1,
+    srcs = glob([
+        "src/main/java/io/grpc/internal/testing/*.java",
+    ]),
+    visibility = ["//:__subpackages__"],
+    deps = [
+        ":testing",
+        "//api",
+        "//core:internal",
+        "//stub",
+        artifact("com.google.code.findbugs:jsr305"),
+        artifact("com.google.guava:guava"),
+        artifact("io.opencensus:opencensus-api"),
+    ],
+)
