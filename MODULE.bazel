@@ -88,10 +88,17 @@ grpc_android_maven.install(
     # Set this explicitly since the default guess is incorrect under Bzlmod.
     aar_import_bzl_label = "@rules_android//rules:rules.bzl",
     artifacts = [
-        "androidx.annotation:annotation:1.6.0",
-        "androidx.annotation:annotation-jvm:1.6.0",
+        "androidx.annotation:annotation:1.7.0",
+        "androidx.annotation:annotation-jvm:1.7.0",
         "androidx.core:core:1.13.1",
         "androidx.lifecycle:lifecycle-common:2.6.2",
+        # Test-only. Keep in sync with gradle/libs.versions.toml where possible.
+        "androidx.lifecycle:lifecycle-service:2.6.2",  # 2.8+ needs lifecycle-common 2.8+, whose classes moved to -jvm
+        "androidx.test:core:1.7.0",
+        "com.google.guava:guava-testlib:33.6.0-android",
+        "org.robolectric:annotations:4.16.1",
+        "org.robolectric:robolectric:4.16.1",  # Keep in sync with bazel/robolectric_sdks.bzl
+        "org.robolectric:shadows-framework:4.16.1",
     ],
     repositories = [
         "https://repo.maven.apache.org/maven2/",
@@ -102,6 +109,32 @@ grpc_android_maven.install(
     use_starlark_android_rules = True,
 )
 use_repo(grpc_android_maven, "grpc_android_maven")
+
+# Use @maven's copies of libraries that tests also get from @maven, so tests
+# don't see two versions of each.
+grpc_android_maven.override(
+    name = "grpc_android_maven",
+    coordinates = "com.google.errorprone:error_prone_annotations",
+    target = "@maven//:com_google_errorprone_error_prone_annotations",
+)
+grpc_android_maven.override(
+    name = "grpc_android_maven",
+    coordinates = "com.google.guava:guava",
+    target = "@maven//:com_google_guava_guava",
+)
+grpc_android_maven.override(
+    name = "grpc_android_maven",
+    coordinates = "junit:junit",
+    target = "@maven//:junit_junit",
+)
+
+# Android framework jars for Robolectric tests. See bazel/robolectric_sdks.bzl.
+robolectric_sdks_repo = use_repo_rule("//bazel:robolectric_sdks.bzl", "robolectric_sdks_repo")
+
+robolectric_sdks_repo(
+    name = "robolectric_sdks",
+    dev_dependency = True,
+)
 
 maven.override(
     coordinates = "com.google.protobuf:protobuf-java",

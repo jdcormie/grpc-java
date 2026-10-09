@@ -1,0 +1,5 @@
+# Starlark helpers for grpc-java's own build. Not public API.
+#
+# Keep this file free of targets so that `bazel build //...` can load the
+# package in every supported configuration, including WORKSPACE builds that
+# don't have rules_android.
