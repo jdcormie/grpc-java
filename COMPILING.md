@@ -172,4 +172,21 @@ Android SDK. If you don't have the SDK and/or don't care about Android, use the
 $ bazelisk build //... --config=skip_android
 ```
 
-You cannot run the tests from Bazel at this time.
+Bazel can also run the Robolectric tests of the `android` and `binder` modules.
+Like building them, this needs the Android SDK, with build-tools 35.0.0 or
+later. The first run downloads about 650 MB of Android framework jars for
+Robolectric.
+
+```sh
+$ bazelisk test //android/... //binder/...
+```
+
+Each module's tests are a single target, so use `--test_filter` to run one test
+class or method:
+
+```sh
+$ bazelisk test //binder:robolectric_tests --test_filter=io.grpc.binder.SecurityPoliciesTest#
+```
+
+Most other tests, and the instrumented tests in `binder/src/androidTest`, still
+need Gradle.
