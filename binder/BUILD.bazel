@@ -1,5 +1,6 @@
 load("@rules_android//rules:rules.bzl", "android_library")
 load("@rules_jvm_external//:defs.bzl", "artifact")
+load("//bazel:robolectric_tests.bzl", "robolectric_tests")
 
 licenses(["notice"])
 
@@ -25,5 +26,59 @@ android_library(
         artifact("com.google.code.findbugs:jsr305"),
         artifact("com.google.errorprone:error_prone_annotations"),
         artifact("com.google.guava:guava"),
+    ],
+)
+
+# Like Gradle's testFixtures source set.
+android_library(
+    name = "test_fixtures",
+    testonly = 1,
+    srcs = glob([
+        "src/testFixtures/java/**/*.java",
+    ]),
+    custom_package = "io.grpc.binder",
+    deps = [
+        ":binder",
+        "//api",
+        "//core:internal",
+        "//core:test_fixtures",
+        artifact("com.google.code.findbugs:jsr305"),
+        artifact("com.google.errorprone:error_prone_annotations"),
+        artifact("com.google.guava:guava"),
+    ],
+)
+
+robolectric_tests(
+    name = "robolectric_tests",
+    srcs = glob(["src/test/java/**/*.java"]),
+    custom_package = "io.grpc.binder",
+    shard_count = 4,
+    deps = [
+        ":binder",
+        ":test_fixtures",
+        "//api",
+        "//api:test_fixtures",
+        "//core:internal",
+        "//core:test_fixtures",
+        "//inprocess",
+        "//protobuf-lite",
+        "//stub",
+        "//testing",
+        "@com_google_protobuf//:protobuf_java",
+        "@grpc_android_maven//:androidx_annotation_annotation_jvm",
+        "@grpc_android_maven//:androidx_core_core",
+        "@grpc_android_maven//:androidx_lifecycle_lifecycle_common",
+        "@grpc_android_maven//:androidx_lifecycle_lifecycle_service",
+        "@grpc_android_maven//:androidx_test_core",
+        "@grpc_android_maven//:com_google_guava_guava_testlib",
+        "@grpc_android_maven//:org_robolectric_annotations",
+        "@grpc_android_maven//:org_robolectric_robolectric",
+        "@grpc_android_maven//:org_robolectric_shadows_framework",
+        artifact("com.google.code.findbugs:jsr305"),
+        artifact("com.google.errorprone:error_prone_annotations"),
+        artifact("com.google.guava:guava"),
+        artifact("com.google.truth:truth"),
+        artifact("junit:junit"),
+        artifact("org.mockito:mockito-core"),
     ],
 )
