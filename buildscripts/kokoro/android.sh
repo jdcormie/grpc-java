@@ -46,9 +46,6 @@ chmod +x /tmp/bazelisk/bazelisk
 export PATH=/tmp/bazelisk:$PATH
 
 export USE_BAZEL_VERSION=9.1.0
-bazelisk build \
-  //android \
-  //binder
 
 curl -Ls https://github.com/Kitware/CMake/releases/download/v3.26.3/cmake-3.26.3-linux-x86_64.tar.gz | \
     tar xz -C /tmp
@@ -83,6 +80,22 @@ if [[ ! -z $(git status --porcelain) ]]; then
   echo "Error Working directory is not clean. Forget to commit generated files?"
   exit 1
 fi
+
+# Run the Robolectric tests with Bazel too. Gradle's run of them, above,
+# downloaded the Android jars they need to ~/.m2. --distdir lets Bazel use
+# those copies, once their checksums match, instead of downloading ~650 MB
+# again.
+distdir_flags=()
+for dir in "$HOME"/.m2/repository/org/robolectric/android-all-instrumented/*/; do
+  if [[ -d "$dir" ]]; then
+    distdir_flags+=("--distdir=$dir")
+  fi
+done
+bazelisk test \
+  --test_output=errors \
+  ${distdir_flags[@]+"${distdir_flags[@]}"} \
+  //android/... \
+  //binder/...
 
 # Build examples
 
