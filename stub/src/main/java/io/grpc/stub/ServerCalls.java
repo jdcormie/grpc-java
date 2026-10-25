@@ -26,6 +26,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.Status;
+import java.util.function.Consumer;
 
 /**
  * Utility functions for adapting {@link ServerCallHandler}s to application service implementation,
@@ -213,6 +214,13 @@ public final class ServerCalls {
           responseObserver.onCloseHandler.run();
         }
       }
+
+      @Override
+      public void onEvent(Object event) {
+        if (responseObserver.onEventHandler != null) {
+          responseObserver.onEventHandler.accept(event);
+        }
+      }
     }
   }
 
@@ -305,6 +313,13 @@ public final class ServerCalls {
           responseObserver.onCloseHandler.run();
         }
       }
+
+      @Override
+      public void onEvent(Object event) {
+        if (responseObserver.onEventHandler != null) {
+          responseObserver.onEventHandler.accept(event);
+        }
+      }
     }
   }
 
@@ -335,6 +350,7 @@ public final class ServerCalls {
     private boolean aborted = false;
     private boolean completed = false;
     private Runnable onCloseHandler;
+    private Consumer<Object> onEventHandler;
 
     // Non private to avoid synthetic class
     ServerCallStreamObserverImpl(ServerCall<ReqT, RespT> call, boolean serverStreamingOrBidi) {
@@ -453,6 +469,19 @@ public final class ServerCalls {
           + "during the initial call to the application, before the service returns its "
           + "StreamObserver");
       this.onCloseHandler = onCloseHandler;
+    }
+
+    @Override
+    public void setOnEventHandler(Consumer<Object> onEventHandler) {
+      checkState(!frozen, "Cannot alter onEventHandler after initialization. May only be called "
+          + "during the initial call to the application, before the service returns its "
+          + "StreamObserver");
+      this.onEventHandler = onEventHandler;
+    }
+
+    @Override
+    public void triggerEvent(Object event) {
+      call.triggerEvent(event);
     }
   }
 

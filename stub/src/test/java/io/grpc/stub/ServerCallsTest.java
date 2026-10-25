@@ -649,6 +649,347 @@ public class ServerCallsTest {
     assertArrayEquals(new int[]{0, 1, 1, 2, 2, 2}, receivedMessages);
   }
 
+  @Test
+  public void onEventHandlerCalled_bidiStreaming() throws Exception {
+    final List<Object> events = new ArrayList<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncBidiStreamingCall(
+        new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
+          @Override
+          public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
+            ((ServerCallStreamObserver<Integer>) responseObserver).setOnEventHandler(events::add);
+            return new ServerCalls.NoopStreamObserver<>();
+          }
+        });
+    ServerCall.Listener<Integer> callListener = callHandler.startCall(serverCall, new Metadata());
+    Object event = new Object();
+
+    callListener.onEvent(event);
+
+    assertThat(events).containsExactly(event);
+  }
+
+  @Test
+  public void onEventHandlerCalled_serverStreaming() throws Exception {
+    final List<Object> events = new ArrayList<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncServerStreamingCall(
+        new ServerCalls.ServerStreamingMethod<Integer, Integer>() {
+          @Override
+          public void invoke(Integer req, StreamObserver<Integer> responseObserver) {
+            ((ServerCallStreamObserver<Integer>) responseObserver).setOnEventHandler(events::add);
+          }
+        });
+    ServerCall.Listener<Integer> callListener = callHandler.startCall(serverCall, new Metadata());
+    callListener.onMessage(1);
+    callListener.onHalfClose();
+    Object event = new Object();
+
+    callListener.onEvent(event);
+
+    assertThat(events).containsExactly(event);
+  }
+
+  @Test
+  public void onEventHandlerCalled_unary() throws Exception {
+    final List<Object> events = new ArrayList<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncUnaryCall(
+        new ServerCalls.UnaryMethod<Integer, Integer>() {
+          @Override
+          public void invoke(Integer req, StreamObserver<Integer> responseObserver) {
+            ((ServerCallStreamObserver<Integer>) responseObserver).setOnEventHandler(events::add);
+          }
+        });
+    ServerCall.Listener<Integer> callListener = callHandler.startCall(serverCall, new Metadata());
+    callListener.onMessage(1);
+    callListener.onHalfClose();
+    Object event = new Object();
+
+    callListener.onEvent(event);
+
+    assertThat(events).containsExactly(event);
+  }
+
+  @Test
+  public void eventsDeliveredInOrderWithMessagesAndHalfClose() throws Exception {
+    final List<String> callbacks = new ArrayList<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncBidiStreamingCall(
+        new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
+          @Override
+          public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
+            ((ServerCallStreamObserver<Integer>) responseObserver).setOnEventHandler(
+                event -> callbacks.add("event:" + event));
+            return new ServerCalls.NoopStreamObserver<Integer>() {
+              @Override
+              public void onNext(Integer value) {
+                callbacks.add("message:" + value);
+              }
+
+              @Override
+              public void onCompleted() {
+                callbacks.add("halfClose");
+              }
+            };
+          }
+        });
+    ServerCall.Listener<Integer> callListener = callHandler.startCall(serverCall, new Metadata());
+
+    callListener.onMessage(1);
+    callListener.onEvent("a");
+    callListener.onHalfClose();
+    callListener.onEvent("b");
+
+    assertThat(callbacks).containsExactly("message:1", "event:a", "halfClose", "event:b").inOrder();
+  }
+
+  @Test
+  public void eventAfterApplicationCompletedIsStillDelivered() throws Exception {
+    final List<Object> events = new ArrayList<>();
+    final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
+        new AtomicReference<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncBidiStreamingCall(
+        new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
+          @Override
+          public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
+            ServerCallStreamObserver<Integer> serverCallObserver =
+                (ServerCallStreamObserver<Integer>) responseObserver;
+            serverCallObserver.setOnEventHandler(events::add);
+            callObserver.set(serverCallObserver);
+            return new ServerCalls.NoopStreamObserver<>();
+          }
+        });
+    ServerCall.Listener<Integer> callListener = callHandler.startCall(serverCall, new Metadata());
+    callObserver.get().onCompleted();
+    assertEquals(Status.OK, serverCall.status);
+
+    callListener.onEvent("after close");
+
+    assertThat(events).containsExactly("after close");
+  }
+
+  @Test
+  public void eventAfterApplicationErrorIsStillDelivered() throws Exception {
+    final List<Object> events = new ArrayList<>();
+    final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
+        new AtomicReference<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncBidiStreamingCall(
+        new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
+          @Override
+          public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
+            ServerCallStreamObserver<Integer> serverCallObserver =
+                (ServerCallStreamObserver<Integer>) responseObserver;
+            serverCallObserver.setOnEventHandler(events::add);
+            callObserver.set(serverCallObserver);
+            return new ServerCalls.NoopStreamObserver<>();
+          }
+        });
+    ServerCall.Listener<Integer> callListener = callHandler.startCall(serverCall, new Metadata());
+    callObserver.get().onError(Status.INTERNAL.asRuntimeException());
+    assertEquals(Status.Code.INTERNAL, serverCall.status.getCode());
+
+    callListener.onEvent("after error");
+
+    assertThat(events).containsExactly("after error");
+  }
+
+  @Test
+  public void eventWithoutHandlerIsIgnored_bidiStreaming() throws Exception {
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncBidiStreamingCall(
+        new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
+          @Override
+          public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
+            return new ServerCalls.NoopStreamObserver<>();
+          }
+        });
+    ServerCall.Listener<Integer> callListener = callHandler.startCall(serverCall, new Metadata());
+
+    // No exception
+    callListener.onEvent("ignored");
+  }
+
+  @Test
+  public void eventBeforeUnaryServiceInvocationIsIgnored() throws Exception {
+    final List<Object> events = new ArrayList<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncUnaryCall(
+        new ServerCalls.UnaryMethod<Integer, Integer>() {
+          @Override
+          public void invoke(Integer req, StreamObserver<Integer> responseObserver) {
+            ((ServerCallStreamObserver<Integer>) responseObserver).setOnEventHandler(events::add);
+          }
+        });
+    ServerCall.Listener<Integer> callListener = callHandler.startCall(serverCall, new Metadata());
+
+    // No handler can have been registered yet, so the event is dropped rather than buffered.
+    callListener.onEvent("too early");
+    callListener.onMessage(1);
+    callListener.onHalfClose();
+    callListener.onEvent("in time");
+
+    assertThat(events).containsExactly("in time");
+  }
+
+  @Test
+  public void cannotSetOnEventHandlerAfterServiceInvocation() throws Exception {
+    final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
+        new AtomicReference<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncBidiStreamingCall(
+        new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
+          @Override
+          public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
+            callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
+            return new ServerCalls.NoopStreamObserver<>();
+          }
+        });
+    callHandler.startCall(serverCall, new Metadata());
+    try {
+      callObserver.get().setOnEventHandler(event -> { });
+      fail("Cannot set onEvent handler after service invocation");
+    } catch (IllegalStateException expected) {
+      // Expected
+    }
+  }
+
+  @Test
+  public void triggerEventDelegatesToServerCall() throws Exception {
+    final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
+        new AtomicReference<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncBidiStreamingCall(
+        new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
+          @Override
+          public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
+            callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
+            return new ServerCalls.NoopStreamObserver<>();
+          }
+        });
+    callHandler.startCall(serverCall, new Metadata());
+    Object event = new Object();
+
+    callObserver.get().triggerEvent(event);
+
+    assertThat(serverCall.triggeredEvents).containsExactly(event);
+  }
+
+  @Test
+  public void triggerEventAfterApplicationCompletedStillDelegatesToServerCall() throws Exception {
+    final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
+        new AtomicReference<>();
+    ServerCallHandler<Integer, Integer> callHandler = ServerCalls.asyncBidiStreamingCall(
+        new ServerCalls.BidiStreamingMethod<Integer, Integer>() {
+          @Override
+          public StreamObserver<Integer> invoke(StreamObserver<Integer> responseObserver) {
+            callObserver.set((ServerCallStreamObserver<Integer>) responseObserver);
+            return new ServerCalls.NoopStreamObserver<>();
+          }
+        });
+    callHandler.startCall(serverCall, new Metadata());
+    callObserver.get().onCompleted();
+
+    // Must not throw; whether the event is delivered is up to the ServerCall.
+    callObserver.get().triggerEvent("after close");
+
+    assertThat(serverCall.triggeredEvents).containsExactly("after close");
+  }
+
+  @Test
+  public void inprocessTransportEventAfterCancelNotDelivered() throws Exception {
+    final AtomicReference<ServerCallStreamObserver<Integer>> callObserver =
+        new AtomicReference<>();
+    final CountDownLatch serviceInvoked = new CountDownLatch(1);
+    final CountDownLatch serviceCancelled = new CountDownLatch(1);
+    final AtomicInteger eventsDelivered = new AtomicInteger();
+    ServerServiceDefinition service = ServerServiceDefinition.builder(
+        new ServiceDescriptor("some", SERVER_STREAMING_METHOD))
+        .addMethod(SERVER_STREAMING_METHOD, ServerCalls.asyncServerStreamingCall(
+            new ServerCalls.ServerStreamingMethod<Integer, Integer>() {
+              @Override
+              public void invoke(Integer request, StreamObserver<Integer> responseObserver) {
+                ServerCallStreamObserver<Integer> serverCallObserver =
+                    (ServerCallStreamObserver<Integer>) responseObserver;
+                serverCallObserver.setOnEventHandler(event -> eventsDelivered.incrementAndGet());
+                serverCallObserver.setOnCancelHandler(serviceCancelled::countDown);
+                callObserver.set(serverCallObserver);
+                serviceInvoked.countDown();
+              }
+            }))
+        .build();
+    String name = "event-after-cancel" + System.nanoTime();
+    // directExecutor() makes in-process event delivery and cancellation synchronous, so the
+    // assertions below are deterministic.
+    InProcessServerBuilder.forName(name).directExecutor().addService(service).build().start();
+    ManagedChannel channel = InProcessChannelBuilder.forName(name).directExecutor().build();
+    ClientCall<Integer, Integer> clientCall =
+        channel.newCall(SERVER_STREAMING_METHOD, CallOptions.DEFAULT);
+    clientCall.start(new ClientCall.Listener<Integer>() {}, new Metadata());
+    clientCall.sendMessage(1);
+    clientCall.halfClose();
+    assertTrue(serviceInvoked.await(5, TimeUnit.SECONDS));
+
+    callObserver.get().triggerEvent("before cancel");
+    assertEquals(1, eventsDelivered.get());
+    clientCall.cancel("test", null);
+    assertTrue(serviceCancelled.await(5, TimeUnit.SECONDS));
+    callObserver.get().triggerEvent("after cancel");
+
+    assertEquals(1, eventsDelivered.get());
+    channel.shutdownNow();
+  }
+
+  @Test
+  public void serverCallStreamObserverDefaultsThrowUnsupportedOperation() throws Exception {
+    ServerCallStreamObserver<Integer> observer = new MinimalServerCallStreamObserver();
+    try {
+      observer.setOnEventHandler(event -> { });
+      fail("Expected UnsupportedOperationException");
+    } catch (UnsupportedOperationException expected) {
+      // Expected
+    }
+    try {
+      observer.triggerEvent("event");
+      fail("Expected UnsupportedOperationException");
+    } catch (UnsupportedOperationException expected) {
+      // Expected
+    }
+  }
+
+  /** A subclass that only implements the abstract methods, as a third-party subclass might. */
+  private static final class MinimalServerCallStreamObserver
+      extends ServerCallStreamObserver<Integer> {
+    @Override
+    public boolean isCancelled() {
+      return false;
+    }
+
+    @Override
+    public void setOnCancelHandler(Runnable onCancelHandler) {}
+
+    @Override
+    public void setCompression(String compression) {}
+
+    @Override
+    public boolean isReady() {
+      return true;
+    }
+
+    @Override
+    public void setOnReadyHandler(Runnable onReadyHandler) {}
+
+    @Override
+    public void request(int count) {}
+
+    @Override
+    public void setMessageCompression(boolean enable) {}
+
+    @Override
+    public void disableAutoInboundFlowControl() {}
+
+    @Override
+    public void onNext(Integer value) {}
+
+    @Override
+    public void onError(Throwable t) {}
+
+    @Override
+    public void onCompleted() {}
+  }
+
   public static class IntegerMarshaller implements MethodDescriptor.Marshaller<Integer> {
     @Override
     public InputStream stream(Integer value) {
@@ -677,6 +1018,7 @@ public class ServerCallsTest {
     private final MethodDescriptor<Integer, Integer> methodDescriptor;
     private final List<Integer> requestCalls = new ArrayList<>();
     private final List<Integer> responses = new ArrayList<>();
+    private final List<Object> triggeredEvents = new ArrayList<>();
     private Status status;
     private boolean isCancelled;
     private boolean isReady;
@@ -726,6 +1068,11 @@ public class ServerCallsTest {
     @Override
     public MethodDescriptor<Integer, Integer> getMethodDescriptor() {
       return methodDescriptor;
+    }
+
+    @Override
+    public void triggerEvent(Object event) {
+      triggeredEvents.add(event);
     }
 
     public int getOnReadyThreshold() {
